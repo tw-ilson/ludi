@@ -1,0 +1,18 @@
+[package]
+name = "libludi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ambassador = "0.3.6"
+anyhow = "1.0.86"
+derive_more = "0.99.17"
+either = "1.12.0"
+half = "2.4.1"
+itertools = "0.13.0"
+num = "0.4.3"
+smallvec = "1.13.2"
+thiserror = "1.0.61"
+unicode-segmentation = "1.11.0"
