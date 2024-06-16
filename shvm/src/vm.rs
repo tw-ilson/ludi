@@ -8,7 +8,6 @@ use libludi::{
 use std::cell::OnceCell;
 use std::env;
 use std::fs::write;
-use std::ops::{Index, IndexMut};
 
 type Value = DataType;
 pub struct Stack(Vec<Value>); // values on our stack have unbounded size
@@ -78,18 +77,18 @@ impl ChunkMachine {
                 } // do nothing if register is empty?
                 Ok(None)
             }
-            NEG { src, dest } => {
-                if let Some(v) = &self.registers[src as usize] {
-                    self.registers[dest as usize] = Some(v.neg())
-                }
-                Ok(None)
-            }
+            // NEG { src, dest } => {
+            //     if let Some(v) = &self.registers[src as usize] {
+            //         self.registers[dest as usize] = Some(libludi::ops::Neg::neg(*v)?)
+            //     }
+            //     Ok(None)
+            // }
             ADD { src1, src2, dest } => {
                 if let (Some(v1), Some(v2)) = (
                     &self.registers[src1 as usize],
                     &self.registers[src2 as usize],
                 ) {
-                    self.registers[dest as usize] = Some(v1.add(v2))
+                    self.registers[dest as usize] = Some(Add::add(v1.clone(),v2.clone())?)
                 }
                 Ok(None)
             }
@@ -98,7 +97,7 @@ impl ChunkMachine {
                     &self.registers[src1 as usize],
                     &self.registers[src2 as usize],
                 ) {
-                    self.registers[dest as usize] = Some(v1.sub(v2))
+                    self.registers[dest as usize] = Some(Sub::sub(v1.clone(), v2.clone())?)
                 }
                 Ok(None)
             }
@@ -107,7 +106,7 @@ impl ChunkMachine {
                     &self.registers[src1 as usize],
                     &self.registers[src2 as usize],
                 ) {
-                    self.registers[dest as usize] = Some(v1.mul(v2))
+                    self.registers[dest as usize] = Some(Mul::mul(v1.clone(), v2.clone())?)
                 }
                 Ok(None)
             }
@@ -116,12 +115,12 @@ impl ChunkMachine {
                     &self.registers[src1 as usize],
                     &self.registers[src2 as usize],
                 ) {
-                    self.registers[dest as usize] = Some(v1.div(v2))
+                    self.registers[dest as usize] = Some(Div::div(v1.clone(), v2.clone())?)
                 }
                 Ok(None)
             }
             RETURN => Ok(self.registers[0].clone()),
-            _ => Err(LangError::RuntimeErr(op, "unsupported op!".into())),
+            _ => Err(LangError::RuntimeErr(format!("unsupported op: {:?}", op))),
         }
     }
     pub fn evaluate(&mut self) -> Result<Option<Value>> {
@@ -216,7 +215,7 @@ impl Stack {
         self.0.pop().expect("nothing on the stack!")
     }
 }
-impl Index<isize> for Stack {
+impl std::ops::Index<isize> for Stack {
     type Output = Value;
     fn index(&self, index: isize) -> &Self::Output {
         if index < 0 {
@@ -227,7 +226,7 @@ impl Index<isize> for Stack {
             .expect("indexing beyond stack pointer!")
     }
 }
-impl IndexMut<isize> for Stack {
+impl std::ops::IndexMut<isize> for Stack {
     fn index_mut(&mut self, index: isize) -> &mut Self::Output {
         if index < 0 {
             panic!("expects positive index for values on stack")

@@ -3,30 +3,6 @@ name = "interpreter"
 version = "0.1.0"
 edition = "2021"
 
-# [lib]
-# name = "interpreter"           # The name of the target.
-# path = "src/lib.rs"    # The source file of the target.
-# test = false           # Is tested by default.
-# doctest = false         # Documentation examples are tested by default.
-# bench = false           # Is benchmarked by default.
-# doc = true             # Is documented by default.
-# crate-type = ["lib"]   # The crate types to generate.
-# required-features = [] # Features required to build this target (N/A for lib).
-#
-# target-cpu="native"
-
 [dependencies]
 libludi = {path = "../libludi/"}
-anyhow = "1.0.83"
-bytemuck = "1.15.0"
-cupid = "0.6.1"
-derive_more = "0.99.17"
-either = "1.12.0"
-half = "2.4.1"
-itertools = "0.13.0"
-num = "0.4.3"
-# naga = "0.19.2"
-serde = "1.0.198"
-smallvec = "1.13.2"
-thiserror = "1.0.60"
-unicode-segmentation = "1.11.0"
+rustyline = "14.0.0"

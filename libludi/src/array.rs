@@ -8,7 +8,7 @@ use crate::err::{LangError, Result};
 use crate::ops::*;
 use smallvec::{smallvec, SmallVec};
 
-pub type ShapeVec = SmallVec<[u32; 4]>;// TODO: use newtype pattern
+pub type ShapeVec = SmallVec<[u32; 4]>; // TODO: use newtype pattern
 
 // Row-major Array
 #[derive(Clone, Hash, Debug, PartialEq, Eq)]
@@ -20,8 +20,6 @@ pub struct Array<T> {
 
 #[repr(u8)]
 #[derive(derive_more::Display, Debug, Clone, PartialEq)]
-// // #[delegate(Data)]
-// #[delegate(crate::ops::Add)]
 pub enum ArrayType {
     UInt8(Array<u8>),
     Int8(Array<i8>),
@@ -31,8 +29,6 @@ pub enum ArrayType {
     Int32(Array<i32>),
     Int64(Array<i64>),
     UInt64(Array<u64>),
-    // BigUInt(Array<num::BigUint>),
-    // BigInt(Array<num::BigInt>),
     BFloat16(Array<half::bf16>),
     Float16(Array<half::f16>),
     Float32(Array<f32>),
@@ -41,6 +37,12 @@ pub enum ArrayType {
 }
 
 impl<T> Array<T> {
+    pub fn new(shape: &[u32], data: &[T]) -> Self where T: Clone {
+        Array {
+            shape: ShapeVec::from_slice(shape),
+            data: Vec::from(data)
+        }
+    }
     pub fn shape(&self) -> &[u32] {
         &self.shape
     }
@@ -52,20 +54,21 @@ impl<T> Array<T> {
         &self.data
     }
     pub fn rank(&self) -> usize {
-        self.shape().len()
+        self.shape.len()
     }
     pub fn get(&self, idxs: &[usize]) -> Option<&T> {
         if idxs.len() != self.rank() {
             None
         } else {
             self.data.get(
-                self.shape()
-                    .iter()
+                (1..=self.rank())
                     .rev()
-                    .scan(1usize, |acc, dim| Some((*acc) * (*dim as usize)))
-                    .zip(&idxs[..idxs.len() - 1])
-                    .fold(0, |acc, (chunk_sz, i)| acc + chunk_sz * i)
-                    + idxs[idxs.len() - 1],
+                    .scan(1, |acc, i| {
+                        let res = *acc * idxs[i - 1];
+                        *acc = self.shape[i - 1] as usize;
+                        Some(res)
+                    })
+                    .sum::<usize>(),
             )
         }
     }
@@ -144,16 +147,17 @@ impl<T: Display> Display for Array<T> {
         fn fmt_help<T: Display>(data_slice: &[T], shape_remaining: &[u32]) -> String {
             let mut r = String::new();
             for i in 0..shape_remaining[0] {
-                r = format!("{}{}",r,
+                r = format!(
+                    "{}{}",
+                    r,
                     if shape_remaining.len() == 1 {
                         format!("{} ", data_slice[i as usize])
                     } else {
                         format!(
                             "\n{}",
                             fmt_help(
-                                &data_slice[
-                                    (shape_remaining[1..].iter().product::<u32>()*i) as usize..
-                                ],
+                                &data_slice
+                                    [(shape_remaining[1..].iter().product::<u32>() * i) as usize..],
                                 &shape_remaining[1..],
                             )
                         )
@@ -200,24 +204,9 @@ tryfrom_array_impl!(
     Int32(i32),
     Int64(i64),
     UInt64(u64),
-    // BigUInt(num::BigUint),
-    // BigInt(num::BigInt),
     BFloat16(half::bf16),
     Float16(half::f16),
     Float32(f32),
     Float64(f64),
     Complex(num::Complex<f32>),
 );
-
-// impl<T> From<Vec<NumberType>> for Array<T> {
-//     fn from(values: Vec<NumberType>) -> Self {
-//         // we will upcast all values to this type.
-//         // TODO: try to make array without checking for cast
-//         let mut numtype = values.iter().fold(0u8, |min, i| std::cmp::max(min, i.descriminant()));
-//         let data: Vec<T> = values.iter().map(|a| {
-//             // do upcasting
-//
-//         }).collect();
-//         Self {shape: smallvec![data.len() as u32], data}
-//     }
-// }
