@@ -60,15 +60,16 @@ macro_rules! define_nodes {
 define_ast! {
     Stmt {
           ExprStmt ExprStmtNode {expression: Expr}
-        | BlockStmt BlockStmtNode {statements: Vec<Stmt>}
+        // | BlockStmt BlockStmtNode {statements: Vec<Stmt>}
         | PrintStmt PrintStmtNode {expression: Expr}
         | AssignStmt AssignStmtNode {name:TokenData, initializer: Expr}
         | FnStmt FnStmtNode {name:TokenData, args:Vec<TokenData>, body:Stmt}
     }
+
     Expr {
           Binary BinaryNode {left: Expr, operator: TokenData, right: Expr}
         | FnCall FnCallNode {callee: Expr, args: Vec<Expr>}
-        | Conditional ConditionalNode {cond: Expr, body:Stmt, elsebody: Option<Stmt>}
+        // | Conditional ConditionalNode {cond: Expr, body:Stmt, elsebody: Option<Stmt>}
         | Logical LogicalNode {left: Expr, operator: TokenData, right: Expr}
         | Grouping GroupingNode {expression: Expr}
         | Sequence SequenceNode {value: ArrayType}

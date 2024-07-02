@@ -1,8 +1,7 @@
-use interpreter::{vm::*, atomic::AtomicData};
-use interpreter::data::DataType;
-use interpreter::parser::Parser;
-// use interpreter::compile::Compile;
-use interpreter::ast::*;
+use libludi::data::DataType;
+use libludi::parser::Parser;
+use libludi::ast::*;
+use shvm::vm::OpCode;
 
 macro_rules! chunk {
     ($vm:tt, [$($op:expr),*]) => {
@@ -13,6 +12,7 @@ macro_rules! chunk {
     )*
     };
 }
+
 #[test]
 fn op_negate() {
     let mut vm = ChunkMachine::new_debug("test");

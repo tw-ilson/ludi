@@ -11,6 +11,14 @@ trait Atomic {}
 
 #[repr(u8)]
 #[derive(derive_more::Display, Debug, Copy, Clone, PartialEq)]
+pub enum AtomicType {
+    AtomicNumber(NumberType),
+    AtomicCharacter(char),
+    AtomicBoolean(bool)
+}
+
+#[repr(u8)]
+#[derive(derive_more::Display, Debug, Copy, Clone, PartialEq)]
 pub enum NumberType {
     UInt8(u8) = 0,
     Int8(i8) = 1,
@@ -26,11 +34,6 @@ pub enum NumberType {
     Float64(f64) = 11,
     Complex(num::Complex<f32>) = 12,
 }
-
-
-//TODO: CharacterType
-
-//TODO: BooleanType
 
 impl NumberType {
     pub fn descriminant(&self) -> u8 {

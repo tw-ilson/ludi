@@ -83,8 +83,8 @@ pub fn statement(tokens: &mut Scanner) -> Result<Stmt> {
             }
             .into(),
         ))
-    } else if match_next!(tokens, OPEN_BRACE).is_some() {
-        block(tokens)
+    // } else if match_next!(tokens, OPEN_BRACE).is_some() {
+    //     block(tokens)
     } else {
         Ok(Stmt::ExprStmt(
             ExprStmtNode {
@@ -96,33 +96,33 @@ pub fn statement(tokens: &mut Scanner) -> Result<Stmt> {
     // match_next!(tokens, SEMICOLON).expect("expected semicolon")
 }
 
-fn block(tokens: &mut Scanner) -> Result<Stmt> {
-    let mut statements = Vec::new();
-    while match_next!(tokens, CLOSE_BRACE).is_none() {
-        statements.push(declaration(tokens)?)
-    }
-    Ok(Stmt::BlockStmt(BlockStmtNode { statements }.into()))
-}
+// fn block(tokens: &mut Scanner) -> Result<Stmt> {
+//     let mut statements = Vec::new();
+//     while match_next!(tokens, CLOSE_BRACE).is_none() {
+//         statements.push(declaration(tokens)?)
+//     }
+//     Ok(Stmt::BlockStmt(BlockStmtNode { statements }.into()))
+// }
 
 pub fn expression(tokens: &mut Scanner) -> Result<Expr> {
-    if match_next!(tokens, IF).is_some() {
-        Ok(Expr::Conditional(
-            ConditionalNode {
-                cond: expression(tokens)?,
-                body: statement(tokens)?,
-                elsebody: {
-                    if match_next!(tokens, ELSE).is_some() {
-                        statement(tokens)?.into()
-                    } else {
-                        None
-                    }
-                },
-            }
-            .into(),
-        ))
-    } else {
+    // if match_next!(tokens, IF).is_some() {
+    //     Ok(Expr::Conditional(
+    //         ConditionalNode {
+    //             cond: expression(tokens)?,
+    //             body: statement(tokens)?,
+    //             elsebody: {
+    //                 if match_next!(tokens, ELSE).is_some() {
+    //                     statement(tokens)?.into()
+    //                 } else {
+    //                     None
+    //                 }
+    //             },
+    //         }
+    //         .into(),
+    //     ))
+    // } else {
         equality(tokens)
-    }
+    // }
 }
 fn logical_or(tokens: &mut Scanner) -> Result<Expr> {
     let mut expr = logical_and(tokens);

@@ -1,9 +1,7 @@
-use interpreter::parser::Parser;
+use libludi::parser::Parser;
 use interpreter::interpret::*;
+use interpreter::repl::repl;
 
-fn repl() {
-
-}
 fn main() {
-    repl()
+    let _ = repl();
 }

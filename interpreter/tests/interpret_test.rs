@@ -67,3 +67,15 @@ fn assignment1() -> Result<()> {
     assert_eq!(format!("{}",r), "4.6");
     Ok(())
 }
+
+// #[test]
+// fn array1() -> Result<()> {
+//     let e: EnvRef = Env::new(None).into();
+//     let _ = "a = (1 1 1)"
+//         .to_string().parse()?[0].interpret(e.clone())?;
+//     let r = "a".to_string().parse()?[0].interpret(e.clone())?;
+//     assert_eq!(format!("{}",r), "2.3");
+//     let r = "a = a + a".to_string().parse()?[0].interpret(e)?;
+//     assert_eq!(format!("{}",r), "4.6");
+//     Ok(())
+// }

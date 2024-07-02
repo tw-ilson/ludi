@@ -3,3 +3,5 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 pub mod interpret;
+pub mod repl;
+pub mod run;

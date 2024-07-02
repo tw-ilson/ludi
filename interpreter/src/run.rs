@@ -4,16 +4,16 @@ use std::io;
 
 use crate::interpret::Interpret;
 // use interpreter::interpret::*;
-use crate::ast::Program;
-use crate::env::{Env, EnvRef};
-use crate::parser::Parser;
+use libludi::ast::Program;
+use libludi::env::{Env, EnvRef};
+use libludi::parser::Parser;
 // use interpreter::primitive::*;
-use crate::scanner::scanner;
+use libludi::scanner::scanner;
 // use std::iter::Peekable;
 
-pub fn run(source: &mut String, e: EnvRef) {
+pub fn run(source: &String, e: EnvRef) {
     let dump_ast: bool = env::var("DUMP_AST").is_ok();
-    let dump_tokens: bool = env::var("DUMP_TOK").is_ok();
+    let dump_tokens: bool = env::var("DUMP_TOKENS").is_ok();
     let mut tokens = scanner(source);
     if dump_tokens {
         tokens.clone().for_each(|t| {

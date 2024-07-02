@@ -1,16 +1,15 @@
 use libludi::{
-    atomic::NumberType,
-    data::{Data, DataType},
+    data::DataType,
     err::{LangError, Result},
     ops::*,
 };
 
 use std::cell::OnceCell;
-use std::env;
-use std::fs::write;
 
 type Value = DataType;
+#[derive(Clone)]
 pub struct Stack(Vec<Value>); // values on our stack have unbounded size
+#[derive(Clone)]
 pub struct Chunk(Vec<OpCode>);
 
 const N_REGS: usize = 4;
@@ -123,15 +122,18 @@ impl ChunkMachine {
             _ => Err(LangError::RuntimeErr(format!("unsupported op: {:?}", op))),
         }
     }
+    pub fn print_trace(&self, op: OpCode) {
+        if self.trace_flag {
+            println!("-- REGISTERS --");
+            println!("{:?}", self.registers);
+            println!("-- Stack --");
+            println!("{:?}\n-->{:?}\n", self.stack, op);
+        }
+    }
     pub fn evaluate(&mut self) -> Result<Option<Value>> {
         let mut r = None;
         for op in self.program.0.clone().into_iter() {
-            if self.trace_flag {
-                println!("-- REGISTERS --");
-                println!("{:?}", self.registers);
-                println!("-- Stack --");
-                println!("{:?}\n-->{:?}\n", self.stack, op);
-            }
+            self.print_trace(op.clone());
             r = self.eval_op(op)?;
         }
         return Ok(r);

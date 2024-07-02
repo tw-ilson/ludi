@@ -36,6 +36,8 @@ pub enum ArrayType {
     Complex(Array<num::Complex<f32>>),
 }
 
+struct Type(NumberType, ShapeVec);
+
 impl<T> Array<T> {
     pub fn new(shape: &[u32], data: &[T]) -> Self where T: Clone {
         Array {
@@ -43,6 +45,9 @@ impl<T> Array<T> {
             data: Vec::from(data)
         }
     }
+    // pub fn type(&self) -> Type {
+    //
+    // }
     pub fn shape(&self) -> &[u32] {
         &self.shape
     }
@@ -94,6 +99,26 @@ macro_rules! iota_impl {
     };
 }
 iota_impl!(i8, i16, i32, u8, u16, u32);
+
+// impl From<NumberType> for ArrayType {
+//     fn from(value: NumberType) -> Self {
+//         match value {
+//             NumberType::UInt8(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Int8(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::UInt16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Int16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::UInt32(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Int32(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Int64(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::UInt64(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::BFloat16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Float16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Float32(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Float64(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//             NumberType::Complex(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
+//         }
+//     }
+// }
 
 // pub trait MapElem {
 //     type Item;
