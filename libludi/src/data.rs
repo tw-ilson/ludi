@@ -1,5 +1,5 @@
 use crate::array::ArrayType;
-use crate::atomic::NumberType;
+use crate::atomic::AtomicType;
 use crate::err::Result;
 use crate::ops::*;
 use std::cell::Cell;
@@ -21,6 +21,5 @@ pub trait Data:
 #[derive(derive_more::Display, Clone, Debug, PartialEq)]
 pub enum DataType {
     Array(ArrayType),
-    Number(NumberType),
-    // Character(T),
+    Atomic(AtomicType),
 }

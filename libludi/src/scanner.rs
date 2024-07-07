@@ -199,12 +199,9 @@ impl<'a> TokenStream<'a> {
             "or" => Some(OR),
             "fn" => Some(FN),
             "let" => Some(LET),
-            "if" => Some(IF),
-            "else" => Some(ELSE),
-            "for" => Some(FOR),
-            "while" => Some(WHILE),
             "print" => Some(PRINT),
-            "return" => Some(RETURN),
+            "array" => Some(ARRAY),
+            "frame" => Some(FRAME),
             _ => {
                 if !in_quote
                     && (trailing_whitespace || trailing_equal || trailing_delim || self.eof)

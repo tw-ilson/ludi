@@ -12,9 +12,9 @@ trait Atomic {}
 #[repr(u8)]
 #[derive(derive_more::Display, Debug, Copy, Clone, PartialEq)]
 pub enum AtomicType {
-    AtomicNumber(NumberType),
-    AtomicCharacter(char),
-    AtomicBoolean(bool)
+    Number(NumberType),
+    Character(char),
+    Boolean(bool)
 }
 
 #[repr(u8)]
@@ -48,24 +48,25 @@ impl NumberType {
     }
 }
 
-impl From<TokenData> for NumberType {
+impl From<TokenData> for AtomicType {
     fn from(value: TokenData) -> Self {
         use NumberType::*;
+        use AtomicType::*;
         use Token::*;
         match value.token {
             NUMBER_LITERAL(literal) => {
                 if literal.contains(".") {
-                    Float64(
+                    Number(Float64(
                         literal
                             .parse::<f64>()
                             .expect("uncaught error. expected floating point literal"),
-                    )
+                    ))
                 } else {
-                    Int64(
+                    Number(Int64(
                         literal
                             .parse::<i64>()
                             .expect("uncaught error. expected integer literal"),
-                    )
+                    ))
                 }
             }
             // TRUE => Bool(true),

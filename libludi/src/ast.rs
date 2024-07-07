@@ -1,9 +1,9 @@
 use crate::tokens::TokenData;
-use crate::atomic::NumberType;
+use crate::atomic::AtomicType;
 use crate::array::ArrayType;
 
 pub type Program = Vec<Stmt>;
-type NodeRef<T> = Box<T>; // might need this as Arc if we want multitreading
+type NodeRef<T> = Box<T>; // might need this as Arc if we want multitreading parsing
 macro_rules! define_ast {
     ($(
         $base_name:ident {
@@ -65,16 +65,17 @@ define_ast! {
         | AssignStmt AssignStmtNode {name:TokenData, initializer: Expr}
         | FnStmt FnStmtNode {name:TokenData, args:Vec<TokenData>, body:Stmt}
     }
-
     Expr {
           Binary BinaryNode {left: Expr, operator: TokenData, right: Expr}
         | FnCall FnCallNode {callee: Expr, args: Vec<Expr>}
         // | Conditional ConditionalNode {cond: Expr, body:Stmt, elsebody: Option<Stmt>}
         | Logical LogicalNode {left: Expr, operator: TokenData, right: Expr}
         | Grouping GroupingNode {expression: Expr}
+        | Frame FrameNode { expression_list: Vec<Expr> }
+        | Array ArrayNode { value: ArrayType }
         | Sequence SequenceNode {value: ArrayType}
         | AtomicCast AtomicCastNode {value: LiteralNode}
-        | Literal LiteralNode {value: NumberType}
+        | Literal LiteralNode {value: AtomicType}
         | Unary UnaryNode {operator: TokenData, right: Expr}
         | Assignment AssignmentNode {name: TokenData}
     }

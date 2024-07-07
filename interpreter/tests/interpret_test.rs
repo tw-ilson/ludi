@@ -1,7 +1,7 @@
 use libludi::env::{Env, EnvRef};
 use libludi::err::Result;
 use libludi::atomic::*;
-use interpreter::parser::Parser;
+use libludi::parser::Parser;
 use interpreter::interpret::*;
 
 #[test]
@@ -61,6 +61,16 @@ fn basic_arithmetic6() -> Result<()> {
 fn assignment1() -> Result<()> {
     let e: EnvRef = Env::new(None).into();
     let _ = "a = 2.0+0.3".to_string().parse()?[0].interpret(e.clone())?;
+    let r = "a".to_string().parse()?[0].interpret(e.clone())?;
+    assert_eq!(format!("{}",r), "2.3");
+    let r = "a = a + a".to_string().parse()?[0].interpret(e)?;
+    assert_eq!(format!("{}",r), "4.6");
+    Ok(())
+}
+#[test]
+fn assignment_err1() -> Result<()> {
+    let e: EnvRef = Env::new(None).into();
+    let _ = "notathing".to_string().parse()?[0].interpret(e.clone())?;
     let r = "a".to_string().parse()?[0].interpret(e.clone())?;
     assert_eq!(format!("{}",r), "2.3");
     let r = "a = a + a".to_string().parse()?[0].interpret(e)?;

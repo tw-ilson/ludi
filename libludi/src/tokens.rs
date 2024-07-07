@@ -33,14 +33,13 @@ pub enum Token {
 
     FN,
     LET,
-    IF,
-    ELSE,
-    FOR,
-    WHILE,
     PRINT,
-    RETURN,
     TRUE,
     FALSE,
+
+    ARRAY,
+    FRAME,
+
 
     IDENTIFIER(String),
     STRING_LITERAL(String),

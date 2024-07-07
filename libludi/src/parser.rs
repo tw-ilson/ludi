@@ -1,12 +1,13 @@
 use crate::{
-    array::ArrayType,
+    array::{Array, ArrayType, NumberArrayType},
     ast::*,
-    atomic::NumberType,
+    atomic::{AtomicType, NumberType},
     err::{err_at_tok, LangError, Result},
     scanner::{scanner, Scanner},
     tokens::{Token, TokenData},
 };
 
+use itertools::Itertools;
 use std::iter::Peekable;
 use Token::*;
 
@@ -121,7 +122,7 @@ pub fn expression(tokens: &mut Scanner) -> Result<Expr> {
     //         .into(),
     //     ))
     // } else {
-        equality(tokens)
+    equality(tokens)
     // }
 }
 fn logical_or(tokens: &mut Scanner) -> Result<Expr> {
@@ -152,6 +153,7 @@ fn logical_and(tokens: &mut Scanner) -> Result<Expr> {
     }
     expr
 }
+
 fn equality(tokens: &mut Scanner) -> Result<Expr> {
     match comparison(tokens) {
         Ok(mut expr) => {
@@ -246,6 +248,7 @@ fn factor(tokens: &mut Scanner) -> Result<Expr> {
         Err(e) => return Err(e),
     }
 }
+
 //TODO:
 fn fncall(tokens: &mut Scanner) -> Result<Expr> {
     let callee = primary(tokens);
@@ -286,9 +289,28 @@ fn unary(tokens: &mut Scanner) -> Result<Expr> {
         primary(tokens)
     }
 }
-fn sequence(tokens: &mut Scanner) -> Result<Expr> {
-    // this can probably be improved...
-    let seq: Vec<TokenData> = (0..)
+fn array_frame(tokens: &mut Scanner) -> Result<Expr> {
+    if match_next!(tokens, OPEN_BRACKET).is_some() {
+        Ok(Expr::Frame(
+            FrameNode {
+                expression_list: (0..)
+                    .map_while(|_| {
+                        if match_next!(tokens, CLOSE_BRACKET).is_some() {
+                            None
+                        } else {
+                            Some(expression(tokens))
+                        }
+                    })
+                    .collect::<Result<Vec<Expr>>>()?,
+            }
+            .into(),
+        ))
+    } else {
+        sequence(tokens)
+    }
+}
+fn atomic_sequence(tokens: &mut Scanner) -> Result<Vec<AtomicType>> {
+    Ok((0..)
         .map_while(|i| {
             if i == 0 {
                 Some(
@@ -306,12 +328,18 @@ fn sequence(tokens: &mut Scanner) -> Result<Expr> {
                 }
             }
         })
-        .collect::<Result<Vec<TokenData>>>()?;
-    let seq: Vec<NumberType> = seq.into_iter().map(|t| t.into()).collect();
+        .collect::<Result<Vec<TokenData>>>()?
+        .into_iter()
+        .map(|t| t.into())
+        .collect())
+}
+
+fn sequence(tokens: &mut Scanner) -> Result<Expr> {
+    let seq = atomic_sequence(tokens)?;
     if seq.len() > 1 {
         Ok(Expr::Sequence(
             SequenceNode {
-                value: seq.try_into()?,
+                value: ArrayType::parse_seq(seq)?,
             }
             .into(),
         ))
@@ -348,6 +376,99 @@ fn primary(tokens: &mut Scanner) -> Result<Expr> {
             .into(),
         ))
     } else {
-        sequence(tokens)
+        array_frame(tokens)
     }
 }
+
+// HELPERS
+
+trait ParseSequence<I> {
+    fn parse_seq(seq: I) -> Result<Self>
+    where
+        Self: Sized;
+}
+
+impl ParseSequence<Vec<AtomicType>> for ArrayType {
+    fn parse_seq(seq: Vec<AtomicType>) -> Result<Self> {
+        Ok(match seq[0] {
+            AtomicType::Number(_) => ArrayType::Number(
+                seq.into_iter()
+                    .map(|atom| {
+                        if let AtomicType::Number(n) = atom {
+                            Ok(n)
+                        } else {
+                            Err(LangError::ParseErr(
+                                "mismatched types in sequence".to_owned(),
+                            ))
+                        }
+                    })
+                    .process_results(|iter| NumberArrayType::parse_seq(iter))??,
+            ),
+            AtomicType::Character(_) => ArrayType::Character(
+                seq.iter()
+                    .map(|atom| {
+                        if let AtomicType::Character(c) = atom {
+                            Ok(*c)
+                        } else {
+                            Err(LangError::ParseErr(
+                                "mismatched tyepes in sequence".to_owned(),
+                            ))
+                        }
+                    })
+                    .process_results(|iter| Array::from_iter(iter))?,
+            ),
+            AtomicType::Boolean(_) => ArrayType::Boolean(
+                seq.iter()
+                    .map(|atom| {
+                        if let AtomicType::Boolean(c) = atom {
+                            Ok(*c)
+                        } else {
+                            Err(LangError::ParseErr(
+                                "mismatched tyepes in sequence".to_owned(),
+                            ))
+                        }
+                    })
+                    .process_results(|iter| Array::from_iter(iter))?,
+            ),
+        })
+    }
+}
+
+macro_rules! parse_sequence_number_impl {
+    ($($variant_name:ident($inner_type:ty),)*) => {
+    impl<I: IntoIterator<Item=NumberType>> ParseSequence<I> for NumberArrayType {
+        fn parse_seq(seq: I) -> Result<Self> {
+            let mut seq = seq.into_iter().peekable();
+            match seq.peek() {
+                None => Err(LangError::ParseErr("tried to parse empty sequence".to_string())),
+                $(Some(NumberType::$variant_name(_)) => Ok(NumberArrayType::$variant_name(Array::from_iter(
+                    seq
+                    .map(|i| {
+                        if let NumberType::$variant_name(n) = i {
+                            Ok(n)
+                        } else {
+                            Err(LangError::CompileErr("expected uniform types".to_owned()))
+                        }
+                    })
+                    .collect::<Result<Vec<$inner_type>>>()?,
+                ))),
+                )*}
+        }
+    }
+    };
+}
+parse_sequence_number_impl!(
+    UInt8(u8),
+    Int8(i8),
+    UInt16(u16),
+    Int16(i16),
+    UInt32(u32),
+    Int32(i32),
+    Int64(i64),
+    UInt64(u64),
+    BFloat16(half::bf16),
+    Float16(half::f16),
+    Float32(f32),
+    Float64(f64),
+    Complex(num::Complex<f32>),
+);

@@ -1,5 +1,12 @@
-use crate::array::{Array, ArrayType};
-use crate::atomic::NumberType;
+/* -- libudi::ops --
+ * defines primitive ops supported by the language.
+ *
+ * TODO: This currently defines runtime behavior of operations for the interpreter, and it needs to
+ * eventually be replaced by codegen in some form.
+ */
+
+use crate::array::{Array, ArrayType, NumberArrayType};
+use crate::atomic::{AtomicType, NumberType};
 use crate::data::{Data, DataType};
 use crate::err::{LangError, Result};
 use either::Either;
@@ -77,7 +84,7 @@ macro_rules! delegate_binops_data {
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self> {
                     match (self, rhs) {
                         (DataType::Array(a), DataType::Array(b)) => Ok(DataType::Array(a.$fname(b)?)),
-                        (DataType::Number(a), DataType::Number(b)) => Ok(DataType::Number(a.$fname(b)?)),
+                        (DataType::Atomic(a), DataType::Atomic(b)) => Ok(DataType::Atomic(a.$fname(b)?)),
                         _=> todo!()
                     }
                 }
@@ -92,21 +99,38 @@ macro_rules! delegate_binops_arraytype {
         $(
             impl $trait for ArrayType {
                 type Rhs = Self;
+                fn $fname(self, rhs: Self::Rhs) -> Result<Self> {
+                    match (self,rhs) {
+                        (ArrayType::Number(a), ArrayType::Number(b)) => Ok(ArrayType::Number(a.$fname(b)?)),
+                        _ => {unimplemented!()}
+                    }
+                }
+            }
+        )*
+    };
+}
+delegate_binops_arraytype!(Add add, Sub sub, Mul mul, Div div);
+
+macro_rules! delegate_binops_numberarraytype {
+    ($($trait:ident $fname:ident),*) => {
+        $(
+            impl $trait for NumberArrayType {
+                type Rhs = Self;
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
                     match (self,rhs) {
-                        (ArrayType::UInt8(a), ArrayType::UInt8(b))  => Ok(ArrayType::UInt8(a.add(b)?)),
-                        (ArrayType::Int8(a), ArrayType::Int8(b))   => Ok(ArrayType::Int8(a.$fname(b)?)),
-                        (ArrayType::UInt16(a), ArrayType::UInt16(b)) => Ok(ArrayType::UInt16(a.$fname(b)?)),
-                        (ArrayType::Int16(a), ArrayType::Int16(b))  => Ok(ArrayType::Int16(a.$fname(b)?)),
-                        (ArrayType::UInt32(a), ArrayType::UInt32(b)) => Ok(ArrayType::UInt32(a.$fname(b)?)),
-                        (ArrayType::Int32(a), ArrayType::Int32(b))  => Ok(ArrayType::Int32(a.$fname(b)?)),
-                        (ArrayType::UInt64(a), ArrayType::UInt64(b)) => Ok(ArrayType::UInt64(a.$fname(b)?)),
-                        (ArrayType::Int64(a), ArrayType::Int64(b))  => Ok(ArrayType::Int64(a.$fname(b)?)),
-                        (ArrayType::BFloat16(a), ArrayType::BFloat16(b)) => Ok(ArrayType::BFloat16(a.$fname(b)?)),
-                        (ArrayType::Float16(a), ArrayType::Float16(b))  => Ok(ArrayType::Float16(a.$fname(b)?)),
-                        (ArrayType::Float32(a), ArrayType::Float32(b)) => Ok(ArrayType::Float32(a.$fname(b)?)),
-                        (ArrayType::Float64(a), ArrayType::Float64(b))  => Ok(ArrayType::Float64(a.$fname(b)?)),
-                        (ArrayType::Complex(a), ArrayType::Complex(b))  => Ok(ArrayType::Complex(a.$fname(b)?)),
+                        (NumberArrayType::UInt8(a), NumberArrayType::UInt8(b))  => Ok(NumberArrayType::UInt8(a.add(b)?)),
+                        (NumberArrayType::Int8(a), NumberArrayType::Int8(b))   => Ok(NumberArrayType::Int8(a.$fname(b)?)),
+                        (NumberArrayType::UInt16(a), NumberArrayType::UInt16(b)) => Ok(NumberArrayType::UInt16(a.$fname(b)?)),
+                        (NumberArrayType::Int16(a), NumberArrayType::Int16(b))  => Ok(NumberArrayType::Int16(a.$fname(b)?)),
+                        (NumberArrayType::UInt32(a), NumberArrayType::UInt32(b)) => Ok(NumberArrayType::UInt32(a.$fname(b)?)),
+                        (NumberArrayType::Int32(a), NumberArrayType::Int32(b))  => Ok(NumberArrayType::Int32(a.$fname(b)?)),
+                        (NumberArrayType::UInt64(a), NumberArrayType::UInt64(b)) => Ok(NumberArrayType::UInt64(a.$fname(b)?)),
+                        (NumberArrayType::Int64(a), NumberArrayType::Int64(b))  => Ok(NumberArrayType::Int64(a.$fname(b)?)),
+                        (NumberArrayType::BFloat16(a), NumberArrayType::BFloat16(b)) => Ok(NumberArrayType::BFloat16(a.$fname(b)?)),
+                        (NumberArrayType::Float16(a), NumberArrayType::Float16(b))  => Ok(NumberArrayType::Float16(a.$fname(b)?)),
+                        (NumberArrayType::Float32(a), NumberArrayType::Float32(b)) => Ok(NumberArrayType::Float32(a.$fname(b)?)),
+                        (NumberArrayType::Float64(a), NumberArrayType::Float64(b))  => Ok(NumberArrayType::Float64(a.$fname(b)?)),
+                        (NumberArrayType::Complex(a), NumberArrayType::Complex(b))  => Ok(NumberArrayType::Complex(a.$fname(b)?)),
                         _ => {unimplemented!()}
                     }
                 }
@@ -115,7 +139,7 @@ macro_rules! delegate_binops_arraytype {
     };
 }
 
-delegate_binops_arraytype!(
+delegate_binops_numberarraytype!(
     Add add,
     Sub sub,
     Mul mul,
@@ -125,22 +149,22 @@ delegate_binops_arraytype!(
 // macro_rules! delegate_unops_arraytype {
 //     ($($trait:ident $fname:ident),*) => {
 //         $(
-//             impl $trait for ArrayType {
+//             impl $trait for NumberArrayType {
 //                 fn $fname(self) -> Result<Self>{
 //                     match self {
-//                         ArrayType::UInt8(a)  => Ok(ArrayType::UInt8(a.$fname()?)),
-//                         ArrayType::Int8(a)   => Ok(ArrayType::Int8(a.$fname()?)),
-//                         ArrayType::UInt16(a) => Ok(ArrayType::UInt16(a.$fname()?)),
-//                         ArrayType::Int16(a)  => Ok(ArrayType::Int16(a.$fname()?)),
-//                         ArrayType::UInt32(a) => Ok(ArrayType::UInt32(a.$fname()?)),
-//                         ArrayType::Int32(a)  => Ok(ArrayType::Int32(a.$fname()?)),
-//                         ArrayType::UInt64(a) => Ok(ArrayType::UInt64(a.$fname()?)),
-//                         ArrayType::Int64(a)  => Ok(ArrayType::Int64(a.$fname()?)),
-//                         ArrayType::BFloat16(a) => Ok(ArrayType::BFloat16(a.$fname()?)),
-//                         ArrayType::Float16(a)  => Ok(ArrayType::Float16(a.$fname()?)),
-//                         ArrayType::Float32(a) => Ok(ArrayType::Float32(a.$fname()?)),
-//                         ArrayType::Float64(a)  => Ok(ArrayType::Float64(a.$fname()?)),
-//                         ArrayType::Complex(a)  => Ok(ArrayType::Complex(a.$fname()?)),
+//                         NumberArrayType::UInt8(a)  => Ok(NumberArrayType::UInt8(a.$fname()?)),
+//                         NumberArrayType::Int8(a)   => Ok(NumberArrayType::Int8(a.$fname()?)),
+//                         NumberArrayType::UInt16(a) => Ok(NumberArrayType::UInt16(a.$fname()?)),
+//                         NumberArrayType::Int16(a)  => Ok(NumberArrayType::Int16(a.$fname()?)),
+//                         NumberArrayType::UInt32(a) => Ok(NumberArrayType::UInt32(a.$fname()?)),
+//                         NumberArrayType::Int32(a)  => Ok(NumberArrayType::Int32(a.$fname()?)),
+//                         NumberArrayType::UInt64(a) => Ok(NumberArrayType::UInt64(a.$fname()?)),
+//                         NumberArrayType::Int64(a)  => Ok(NumberArrayType::Int64(a.$fname()?)),
+//                         NumberArrayType::BFloat16(a) => Ok(NumberArrayType::BFloat16(a.$fname()?)),
+//                         NumberArrayType::Float16(a)  => Ok(NumberArrayType::Float16(a.$fname()?)),
+//                         NumberArrayType::Float32(a) => Ok(NumberArrayType::Float32(a.$fname()?)),
+//                         NumberArrayType::Float64(a)  => Ok(NumberArrayType::Float64(a.$fname()?)),
+//                         NumberArrayType::Complex(a)  => Ok(NumberArrayType::Complex(a.$fname()?)),
 //                         _ => {unimplemented!()}
 //                     }
 //                 }
@@ -149,6 +173,23 @@ delegate_binops_arraytype!(
 //     };
 // }
 // delegate_unops_arraytype!(Neg neg);
+
+macro_rules! delegate_binops_atomictype {
+    ($($trait:ident $fname:ident),*) => {
+        $(
+            impl $trait for AtomicType {
+                type Rhs = Self;
+                fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
+                    match (self,rhs) {
+                        (AtomicType::Number(a), AtomicType::Number(b)) => Ok(AtomicType::Number(a.$fname(b)?)),
+                        _ => {unimplemented!()}
+                    }
+                }
+            }
+        )*
+    };
+}
+delegate_binops_atomictype!(Add add, Sub sub, Mul mul, Div div);
 
 macro_rules! delegate_binops_numbertype {
     ($($trait:ident $fname:ident),*) => {
@@ -184,7 +225,7 @@ delegate_binops_numbertype!(
     Mul mul,
     Div div
 );
-    
+
 // macro_rules! delegate_unops_numbertype {
 //     ($($trait:ident $fname:ident),*) => {
 //         $(

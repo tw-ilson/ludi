@@ -2,7 +2,8 @@ use std::any::TypeId;
 use std::fmt::Display;
 use std::mem::Discriminant;
 
-use crate::atomic::NumberType;
+use crate::ast::{ArrayNode, FrameNode};
+use crate::atomic::{AtomicType, NumberType};
 use crate::data::Data;
 use crate::err::{LangError, Result};
 use crate::ops::*;
@@ -21,6 +22,14 @@ pub struct Array<T> {
 #[repr(u8)]
 #[derive(derive_more::Display, Debug, Clone, PartialEq)]
 pub enum ArrayType {
+    Number(NumberArrayType),
+    Character(Array<char>),
+    Boolean(Array<bool>),
+}
+
+#[repr(u8)]
+#[derive(derive_more::Display, Debug, Clone, PartialEq)]
+pub enum NumberArrayType {
     UInt8(Array<u8>),
     Int8(Array<i8>),
     UInt16(Array<u16>),
@@ -36,13 +45,17 @@ pub enum ArrayType {
     Complex(Array<num::Complex<f32>>),
 }
 
+// How do we make it also look like this?
 struct Type(NumberType, ShapeVec);
 
 impl<T> Array<T> {
-    pub fn new(shape: &[u32], data: &[T]) -> Self where T: Clone {
+    pub fn new(shape: &[u32], data: &[T]) -> Self
+    where
+        T: Clone,
+    {
         Array {
             shape: ShapeVec::from_slice(shape),
-            data: Vec::from(data)
+            data: Vec::from(data),
         }
     }
     // pub fn type(&self) -> Type {
@@ -79,7 +92,17 @@ impl<T> Array<T> {
     }
 }
 
-pub trait MapAxis {}
+impl<A> FromIterator<A> for Array<A> {
+    fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+        let data: Vec<A> = iter.into_iter().collect();
+        let shape = smallvec![data.len() as u32];
+        Self { shape, data }
+    }
+}
+
+// something like this?
+pub trait MapAxis<T> {}
+
 pub trait Iota {
     fn iota(n: u32) -> Self;
 }
@@ -99,73 +122,6 @@ macro_rules! iota_impl {
     };
 }
 iota_impl!(i8, i16, i32, u8, u16, u32);
-
-// impl From<NumberType> for ArrayType {
-//     fn from(value: NumberType) -> Self {
-//         match value {
-//             NumberType::UInt8(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Int8(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::UInt16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Int16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::UInt32(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Int32(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Int64(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::UInt64(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::BFloat16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Float16(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Float32(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Float64(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//             NumberType::Complex(atom) => ArrayType::X(Array<__T__>::new(ShapeVec::default(), vec![atom])),
-//         }
-//     }
-// }
-
-// pub trait MapElem {
-//     type Item;
-//     fn map_elem<R, F>(&mut self, f: F) -> Array<R>
-//     where
-//         F: FnMut(&Self::Item) -> R;
-// }
-// impl<T> MapElem for Array<T> {
-//     type Item = T;
-//     fn map_elem<R, F>(&mut self, f: F) -> Array<R>
-//     where
-//         F: FnMut(&Self::Item) -> R,
-//     {
-//         Array {
-//             shape: self.shape.clone(),
-//             data: self.data.iter().map(f).collect(),
-//         }
-//     }
-// }
-
-// struct IterableArray<T> {
-//     counter: usize,
-//     array: Array<T>,
-// }
-//
-// impl<T> Iterator for IterableArray<T>{
-//     type Item = T;
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if let Some(t) = self.array.data().get(self.counter) {
-//             self.counter += 1;
-//             Some(t)
-//         } else {
-//             None
-//         }
-//     }
-// }
-//
-// impl<T> IntoIterator for Array<T> {
-//     type Item = T;
-//     type IntoIter = IterableArray<T>;
-//     fn into_iter(self) -> Self::IntoIter {
-//         IterableArray {
-//             counter: 0,
-//             array: self,
-//         }
-//     }
-// }
 
 impl<T: Display> Display for Array<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -196,42 +152,42 @@ impl<T: Display> Display for Array<T> {
     }
 }
 
-macro_rules! tryfrom_array_impl {
-    ($($variant_name:ident($inner_type:ty),)*) => {
-    impl TryFrom<Vec<NumberType>> for ArrayType {
-        type Error = LangError;
-        fn try_from(value: Vec<NumberType>) -> Result<Self> {
-            Ok(match value[0] {
-                $(NumberType::$variant_name(_) => ArrayType::$variant_name(Array {
-                    shape: smallvec![value.len() as u32],
-                    data: value
-                    .iter()
-                    .map(|i| {
-                        if let NumberType::$variant_name(n) = i {
-                            Ok(*n)
-                        } else {
-                            Err(LangError::CompileErr("expected uniform types".to_owned()))
-                        }
-                    })
-                    .collect::<Result<Vec<$inner_type>>>()?,
-                }),
-                )*})
-        }
-    }
-    };
-}
-tryfrom_array_impl!(
-    UInt8(u8),
-    Int8(i8),
-    UInt16(u16),
-    Int16(i16),
-    UInt32(u32),
-    Int32(i32),
-    Int64(i64),
-    UInt64(u64),
-    BFloat16(half::bf16),
-    Float16(half::f16),
-    Float32(f32),
-    Float64(f64),
-    Complex(num::Complex<f32>),
-);
+// macro_rules! tryfrom_array_impl {
+//     ($($variant_name:ident($inner_type:ty),)*) => {
+//     impl TryFrom<Vec<NumberType>> for NumberArrayType {
+//         type Error = LangError;
+//         fn try_from(value: Vec<NumberType>) -> Result<Self> {
+//             Ok(match value[0] {
+//                 $(NumberType::$variant_name(_) => NumberArrayType::$variant_name(Array {
+//                     shape: smallvec![value.len() as u32],
+//                     data: value
+//                     .iter()
+//                     .map(|i| {
+//                         if let NumberType::$variant_name(n) = i {
+//                             Ok(*n)
+//                         } else {
+//                             Err(LangError::CompileErr("expected uniform types".to_owned()))
+//                         }
+//                     })
+//                     .collect::<Result<Vec<$inner_type>>>()?,
+//                 }),
+//                 )*})
+//         }
+//     }
+//     };
+// }
+// tryfrom_array_impl!(
+//     UInt8(u8),
+//     Int8(i8),
+//     UInt16(u16),
+//     Int16(i16),
+//     UInt32(u32),
+//     Int32(i32),
+//     Int64(i64),
+//     UInt64(u64),
+//     BFloat16(half::bf16),
+//     Float16(half::f16),
+//     Float32(f32),
+//     Float64(f64),
+//     Complex(num::Complex<f32>),
+// );
