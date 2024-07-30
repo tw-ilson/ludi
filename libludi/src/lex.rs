@@ -21,8 +21,8 @@ use std::str::Chars;
 use unicode_segmentation::{UnicodeSegmentation, Graphemes};
 use Token::*;
 
-pub type Scanner<'a> = Peekable<TokenStream<'a>>;
-pub fn scanner<'a>(s: &'a str) -> Scanner<'a> {
+pub type Lexer<'a> = Peekable<TokenStream<'a>>;
+pub fn lex<'a>(s: &'a str) -> Lexer<'a> {
     TokenStream::new(s).peekable()
 }
 
@@ -32,8 +32,6 @@ pub struct TokenStream<'a> {
     line: usize,
     eof: bool,
 }
-
-
 impl<'a> Iterator for TokenStream<'a> {
     type Item = TokenData;
     fn next(&mut self) -> Option<Self::Item> {
@@ -114,8 +112,8 @@ impl<'a> TokenStream<'a> {
         }
         //NUMBER LITERALS
         if let Some(nums!() | ".") = charlist.graphemes(true).next() {
+            let mut seen_decimal = false;
             loop {
-                let mut seen_decimal = false;
                 match self.source.peek() {
                     Some(&nums!()) => charlist.push_str(self.source.next().unwrap()),
                     Some(&".") => {
@@ -130,7 +128,11 @@ impl<'a> TokenStream<'a> {
                     _ => break,
                 }
             }
-            return Some(NUMBER_LITERAL(charlist.clone())); // also parse number
+            if seen_decimal {
+                return Some(FLOAT_LITERAL(charlist.clone())); // also parse number
+            } else {
+                return Some(INTEGER_LITERAL(charlist.clone()));
+            }
         }
 
         let tok: Option<Token> = match charlist.as_str() {
@@ -143,7 +145,10 @@ impl<'a> TokenStream<'a> {
             "-" => Some(if trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 MINUS_EQUAL
-            } else {
+            } else if let Some(&">") = self.source.peek() {
+                self.source.next();
+                ARROW
+            }else {
                 MINUS
             }),
             "*" => Some(if trailing_equal {
@@ -183,6 +188,7 @@ impl<'a> TokenStream<'a> {
                 EQUAL
             }),
             "." => Some(DOT),
+            ":" => Some(COLON),
             ";" => Some(SEMICOLON),
             "_" => Some(UNDERSCORE),
             "\\" => Some(BACKSLASH),
@@ -212,7 +218,7 @@ impl<'a> TokenStream<'a> {
                 }
             }
         };
-        return tok;
+        tok
     }
 }
 

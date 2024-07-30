@@ -7,67 +7,42 @@ use libludi::{
 use std::cell::OnceCell;
 
 type Value = DataType;
-#[derive(Clone)]
-pub struct Stack(Vec<Value>); // values on our stack have unbounded size
-#[derive(Clone)]
-pub struct Chunk(Vec<OpCode>);
 
-const N_REGS: usize = 4;
-type VReg = u8;
-type VAddr = isize; // virtual address space
-
-#[derive(Debug, Clone)]
-#[repr(u8)]
-pub enum OpCode {
-    // Control flow
-    BRANCH { cond: VReg },
-    CALL { label: u8 /*placeholder*/ },
-    RETURN,
-
-    // two address
-    LOAD { src: VAddr, dest: VReg },
-    LOADCONST { value: Value, dest: VReg }, // change this to a raw pointer eventually
-    STORE { src: VReg, dest: VReg },
-    NEG { src: VReg, dest: VReg },
-    INV { src: VReg, dest: VReg },
-
-    // Three address
-    ADD { src1: VReg, src2: VReg, dest: VReg },
-    SUB { src1: VReg, src2: VReg, dest: VReg },
-    MUL { src1: VReg, src2: VReg, dest: VReg },
-    DIV { src1: VReg, src2: VReg, dest: VReg },
-
-    // Array/Rank ops
-    EXP,
-    REDUCE,
-    GEMM,
-
-    // Shape ops
-    RESHAPE,
-    CONCAT,
+struct Module {
+    funcs: Vec<FnData>
 }
+#[derive(Clone)]
+pub struct BasicBlock(Vec<Operation>);
+
+
+trait Evaluate {
+    fn evaluate(self) -> Result<()>;
+}
+
+// #[derive(Clone)]
+// pub struct Stack(Vec<Value>); // values on our stack have unbounded size
 
 // the virtual machine
 pub struct ChunkMachine {
     name: String,
-    registers: [Option<Value>; N_REGS],
+    // registers: &'static [Value],
     constants: OnceCell<Box<[Value]>>,
-    program: Chunk,
-    stack: Stack,
+    // program: Chunk,
+    // stack: Stack,
     trace_flag: bool,
 }
 
 impl ChunkMachine {
-    fn eval_op(&mut self, op: OpCode) -> Result<Option<Value>> {
+    fn eval_op(&mut self, op: OpCode, registers: &[Value]) -> Result<Option<Value>> {
         use OpCode::*;
         match op {
             LOADCONST { value, dest } => {
                 // this will use constants instead
-                self.registers[dest as usize] = Some(value);
+                self.registers[dest as usize] = value;
                 Ok(None)
             }
             LOAD { src, dest } => {
-                self.registers[dest as usize] = Some(self.stack[src].clone());
+                self.registers[dest as usize] = self.stack[src].clone();
                 Ok(None)
             }
             STORE { src, dest } => {
@@ -76,12 +51,12 @@ impl ChunkMachine {
                 } // do nothing if register is empty?
                 Ok(None)
             }
-            // NEG { src, dest } => {
-            //     if let Some(v) = &self.registers[src as usize] {
-            //         self.registers[dest as usize] = Some(libludi::ops::Neg::neg(*v)?)
-            //     }
-            //     Ok(None)
-            // }
+            NEG { src, dest } => {
+                if let Some(v) = &self.registers[src as usize] {
+                    self.registers[dest as usize] = Some(libludi::ops::Neg::neg(*v)?)
+                }
+                Ok(None)
+            }
             ADD { src1, src2, dest } => {
                 if let (Some(v1), Some(v2)) = (
                     &self.registers[src1 as usize],
@@ -192,7 +167,7 @@ impl Default for ChunkMachine {
     fn default() -> Self {
         Self {
             name: String::from("vm"),
-            registers: std::array::from_fn(|_| None),
+            // registers: std::array::from_fn(|_| None),
             program: Chunk::new(),
             constants: OnceCell::new(),
             stack: Stack::default(),

@@ -3,11 +3,11 @@ use std::fs;
 use std::io;
 
 use crate::interpret::Interpret;
-use libludi::ast::Program;
+use libludi::ast::AstProgram;
 use libludi::env::{Env, EnvRef};
 use libludi::err::{LangError, Result};
 use libludi::parser::Parser;
-use libludi::scanner::scanner;
+use libludi::lex::lex;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
@@ -53,13 +53,13 @@ pub fn repl() -> Result<()> {
 pub fn run(source: &str, e: EnvRef) -> Result<LudiExit> {
     let dump_ast: bool = env::var("DUMP_AST").is_ok();
     let dump_tokens: bool = env::var("DUMP_TOKENS").is_ok();
-    let mut tokens = scanner(source);
+    let mut tokens = lex(source);
     if dump_tokens {
         tokens.clone().for_each(|t| {
             println!("{:?}", t.token);
         })
     };
-    let p: Program = tokens.parse().unwrap();
+    let p: AstProgram = tokens.parse().unwrap();
     for stmt in p {
         if dump_ast {
             println!("{:#?}", &stmt);

@@ -1,34 +1,36 @@
+use libludi::err::Result;
+use melior::{
+    dialect::{arith, func, DialectRegistry},
+    ir::{
+        attribute::{StringAttribute, TypeAttribute},
+        r#type::FunctionType,
+        *,
+    },
+    utility::register_all_dialects,
+    Context,
+};
+
+struct ContextBuilder {
+    context: melior::Context,
+    region: melior::ir::Region<'static>,
+    module: melior::ir::Module<'static>,
+}
+
+pub fn setup_mlir() -> Context {
+    let registry = DialectRegistry::new();
+    register_all_dialects(&registry);
+    let context = Context::new();
+    context.append_dialect_registry(&registry);
+    context.load_all_available_dialects();
+    context
+}
+impl ContextBuilder {
+    pub fn write_op() {}
+    pub fn write_block() {}
+}
+
 melior::dialect! {
     name: "ludi",
-    table_gen:
-r#"
-include "mlir/IR/OpBase.td"
-include "mlir/Interfaces/FunctionInterfaces.td"
-include "mlir/IR/SymbolInterfaces.td"
-include "mlir/Interfaces/SideEffectInterfaces.td"
-
-// Provide a definition of the 'toy' dialect in the ODS framework so that we
-// can define our operations.
-def Ludi_Dialect : Dialect {
-  let name = "ludi";
-
-  // A short one-line summary of our dialect.
-  let summary = "A high-level dialect for analyzing and optimizing the SHVM virtual machine for the"
-                "Ludi language and compiler";
-
-  // A much longer description of our dialect.
-  let description = [{
-    The Ludi language is a multidimensional array language based on Remora that allows you to define
-    functions, perform some math computation, and print results. This dialect
-    provides a representation of the language that is amenable to analysis and
-    optimization.
-  }];
-
-  // The C++ namespace that the dialect class definition resides in.
-  let cppNamespace = "ludi";
+    td_file: "shvm/src/ods/dialect.td",
 }
 
-class Ludi_Op<string mnemonic, list<Trait> traits = []> :
-    Op<Ludi_Dialect, mnemonic, traits>;
-"#
-}

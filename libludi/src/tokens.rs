@@ -1,4 +1,11 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+use std::hash::Hash;
+
+use crate::{
+    err::{LangError, Result},
+    err_at_tok, parse_err,
+};
+
+#[derive(derive_more::Display, Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     PLUS,
     MINUS,
@@ -6,6 +13,7 @@ pub enum Token {
     SLASH,
     EQUAL,
     DOT,
+    COLON,
     SEMICOLON,
     COMMA,
     UNDERSCORE,
@@ -22,6 +30,9 @@ pub enum Token {
     BANG,
     GREATER,
     LESS,
+
+    ARROW, 
+
     GREATER_EQUAL,
     LESS_EQUAL,
     BANG_EQUAL,
@@ -40,12 +51,12 @@ pub enum Token {
     ARRAY,
     FRAME,
 
-
     IDENTIFIER(String),
     STRING_LITERAL(String),
-    NUMBER_LITERAL(String),
+    INTEGER_LITERAL(String),
+    FLOAT_LITERAL(String),
 
-    EOF
+    EOF,
 }
 
 pub fn same_variant(lhs: &Token, rhs: &Token) -> bool {

@@ -5,12 +5,15 @@
  * eventually be replaced by codegen in some form.
  */
 
-use crate::array::{Array, ArrayType, NumberArrayType};
-use crate::atomic::{AtomicType, NumberType};
+use crate::array::{Array, ArrayType, ArrayProps};
+use crate::atomic::{AtomicType};
 use crate::data::{Data, DataType};
 use crate::err::{LangError, Result};
 use either::Either;
 use itertools::izip;
+use num::complex::ComplexFloat;
+use num::Complex;
+
 
 // Unary Ops
 pub trait Neg {
@@ -53,28 +56,8 @@ pub trait Div {
 pub trait UnaryOp: Neg + Inv {}
 pub trait BinaryOp: Add + Sub + Mul + Div {}
 
-impl<T> Neg for Array<T>
-where
-    T: Neg + Copy,
-{
-    fn neg(self) -> Result<Self> {
-        Ok(Array::new(
-            self.shape(),
-            &self
-                .data()
-                .iter()
-                .map_while(|a| a.neg().ok())
-                .collect::<Vec<T>>(),
-        ))
-    }
-}
-// impl<T> Inv for Array<T> {
-//     fn inv(&self) -> Result<Self>
-//         where
-//             Self: Sized {
-//         todo!()
-//     }
-// }
+impl BinaryOp for DataType {}
+// impl UnaryOp for DataType {}
 
 macro_rules! delegate_binops_data {
     ($($trait:ident $fname:ident),*) => {
@@ -99,38 +82,21 @@ macro_rules! delegate_binops_arraytype {
         $(
             impl $trait for ArrayType {
                 type Rhs = Self;
-                fn $fname(self, rhs: Self::Rhs) -> Result<Self> {
-                    match (self,rhs) {
-                        (ArrayType::Number(a), ArrayType::Number(b)) => Ok(ArrayType::Number(a.$fname(b)?)),
-                        _ => {unimplemented!()}
-                    }
-                }
-            }
-        )*
-    };
-}
-delegate_binops_arraytype!(Add add, Sub sub, Mul mul, Div div);
-
-macro_rules! delegate_binops_numberarraytype {
-    ($($trait:ident $fname:ident),*) => {
-        $(
-            impl $trait for NumberArrayType {
-                type Rhs = Self;
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
                     match (self,rhs) {
-                        (NumberArrayType::UInt8(a), NumberArrayType::UInt8(b))  => Ok(NumberArrayType::UInt8(a.add(b)?)),
-                        (NumberArrayType::Int8(a), NumberArrayType::Int8(b))   => Ok(NumberArrayType::Int8(a.$fname(b)?)),
-                        (NumberArrayType::UInt16(a), NumberArrayType::UInt16(b)) => Ok(NumberArrayType::UInt16(a.$fname(b)?)),
-                        (NumberArrayType::Int16(a), NumberArrayType::Int16(b))  => Ok(NumberArrayType::Int16(a.$fname(b)?)),
-                        (NumberArrayType::UInt32(a), NumberArrayType::UInt32(b)) => Ok(NumberArrayType::UInt32(a.$fname(b)?)),
-                        (NumberArrayType::Int32(a), NumberArrayType::Int32(b))  => Ok(NumberArrayType::Int32(a.$fname(b)?)),
-                        (NumberArrayType::UInt64(a), NumberArrayType::UInt64(b)) => Ok(NumberArrayType::UInt64(a.$fname(b)?)),
-                        (NumberArrayType::Int64(a), NumberArrayType::Int64(b))  => Ok(NumberArrayType::Int64(a.$fname(b)?)),
-                        (NumberArrayType::BFloat16(a), NumberArrayType::BFloat16(b)) => Ok(NumberArrayType::BFloat16(a.$fname(b)?)),
-                        (NumberArrayType::Float16(a), NumberArrayType::Float16(b))  => Ok(NumberArrayType::Float16(a.$fname(b)?)),
-                        (NumberArrayType::Float32(a), NumberArrayType::Float32(b)) => Ok(NumberArrayType::Float32(a.$fname(b)?)),
-                        (NumberArrayType::Float64(a), NumberArrayType::Float64(b))  => Ok(NumberArrayType::Float64(a.$fname(b)?)),
-                        (NumberArrayType::Complex(a), NumberArrayType::Complex(b))  => Ok(NumberArrayType::Complex(a.$fname(b)?)),
+                        (ArrayType::UInt8(a), ArrayType::UInt8(b))  => Ok(ArrayType::UInt8(a.add(b)?)),
+                        (ArrayType::Int8(a), ArrayType::Int8(b))   => Ok(ArrayType::Int8(a.$fname(b)?)),
+                        (ArrayType::UInt16(a), ArrayType::UInt16(b)) => Ok(ArrayType::UInt16(a.$fname(b)?)),
+                        (ArrayType::Int16(a), ArrayType::Int16(b))  => Ok(ArrayType::Int16(a.$fname(b)?)),
+                        (ArrayType::UInt32(a), ArrayType::UInt32(b)) => Ok(ArrayType::UInt32(a.$fname(b)?)),
+                        (ArrayType::Int32(a), ArrayType::Int32(b))  => Ok(ArrayType::Int32(a.$fname(b)?)),
+                        (ArrayType::UInt64(a), ArrayType::UInt64(b)) => Ok(ArrayType::UInt64(a.$fname(b)?)),
+                        (ArrayType::Int64(a), ArrayType::Int64(b))  => Ok(ArrayType::Int64(a.$fname(b)?)),
+                        (ArrayType::BFloat16(a), ArrayType::BFloat16(b)) => Ok(ArrayType::BFloat16(a.$fname(b)?)),
+                        (ArrayType::Float16(a), ArrayType::Float16(b))  => Ok(ArrayType::Float16(a.$fname(b)?)),
+                        (ArrayType::Float32(a), ArrayType::Float32(b)) => Ok(ArrayType::Float32(a.$fname(b)?)),
+                        (ArrayType::Float64(a), ArrayType::Float64(b))  => Ok(ArrayType::Float64(a.$fname(b)?)),
+                        (ArrayType::Complex(a), ArrayType::Complex(b))  => Ok(ArrayType::Complex(a.$fname(b)?)),
                         _ => {unimplemented!()}
                     }
                 }
@@ -139,7 +105,7 @@ macro_rules! delegate_binops_numberarraytype {
     };
 }
 
-delegate_binops_numberarraytype!(
+delegate_binops_arraytype!(
     Add add,
     Sub sub,
     Mul mul,
@@ -149,22 +115,22 @@ delegate_binops_numberarraytype!(
 // macro_rules! delegate_unops_arraytype {
 //     ($($trait:ident $fname:ident),*) => {
 //         $(
-//             impl $trait for NumberArrayType {
+//             impl $trait for ArrayType {
 //                 fn $fname(self) -> Result<Self>{
 //                     match self {
-//                         NumberArrayType::UInt8(a)  => Ok(NumberArrayType::UInt8(a.$fname()?)),
-//                         NumberArrayType::Int8(a)   => Ok(NumberArrayType::Int8(a.$fname()?)),
-//                         NumberArrayType::UInt16(a) => Ok(NumberArrayType::UInt16(a.$fname()?)),
-//                         NumberArrayType::Int16(a)  => Ok(NumberArrayType::Int16(a.$fname()?)),
-//                         NumberArrayType::UInt32(a) => Ok(NumberArrayType::UInt32(a.$fname()?)),
-//                         NumberArrayType::Int32(a)  => Ok(NumberArrayType::Int32(a.$fname()?)),
-//                         NumberArrayType::UInt64(a) => Ok(NumberArrayType::UInt64(a.$fname()?)),
-//                         NumberArrayType::Int64(a)  => Ok(NumberArrayType::Int64(a.$fname()?)),
-//                         NumberArrayType::BFloat16(a) => Ok(NumberArrayType::BFloat16(a.$fname()?)),
-//                         NumberArrayType::Float16(a)  => Ok(NumberArrayType::Float16(a.$fname()?)),
-//                         NumberArrayType::Float32(a) => Ok(NumberArrayType::Float32(a.$fname()?)),
-//                         NumberArrayType::Float64(a)  => Ok(NumberArrayType::Float64(a.$fname()?)),
-//                         NumberArrayType::Complex(a)  => Ok(NumberArrayType::Complex(a.$fname()?)),
+//                         ArrayType::UInt8(a)  => Ok(ArrayType::UInt8(a.$fname()?)),
+//                         ArrayType::Int8(a)   => Ok(ArrayType::Int8(a.$fname()?)),
+//                         ArrayType::UInt16(a) => Ok(ArrayType::UInt16(a.$fname()?)),
+//                         ArrayType::Int16(a)  => Ok(ArrayType::Int16(a.$fname()?)),
+//                         ArrayType::UInt32(a) => Ok(ArrayType::UInt32(a.$fname()?)),
+//                         ArrayType::Int32(a)  => Ok(ArrayType::Int32(a.$fname()?)),
+//                         ArrayType::UInt64(a) => Ok(ArrayType::UInt64(a.$fname()?)),
+//                         ArrayType::Int64(a)  => Ok(ArrayType::Int64(a.$fname()?)),
+//                         ArrayType::BFloat16(a) => Ok(ArrayType::BFloat16(a.$fname()?)),
+//                         ArrayType::Float16(a)  => Ok(ArrayType::Float16(a.$fname()?)),
+//                         ArrayType::Float32(a) => Ok(ArrayType::Float32(a.$fname()?)),
+//                         ArrayType::Float64(a)  => Ok(ArrayType::Float64(a.$fname()?)),
+//                         ArrayType::Complex(a)  => Ok(ArrayType::Complex(a.$fname()?)),
 //                         _ => {unimplemented!()}
 //                     }
 //                 }
@@ -174,43 +140,26 @@ delegate_binops_numberarraytype!(
 // }
 // delegate_unops_arraytype!(Neg neg);
 
-macro_rules! delegate_binops_atomictype {
+macro_rules! delegate_binops_numbertype {
     ($($trait:ident $fname:ident),*) => {
         $(
             impl $trait for AtomicType {
                 type Rhs = Self;
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
                     match (self,rhs) {
-                        (AtomicType::Number(a), AtomicType::Number(b)) => Ok(AtomicType::Number(a.$fname(b)?)),
-                        _ => {unimplemented!()}
-                    }
-                }
-            }
-        )*
-    };
-}
-delegate_binops_atomictype!(Add add, Sub sub, Mul mul, Div div);
-
-macro_rules! delegate_binops_numbertype {
-    ($($trait:ident $fname:ident),*) => {
-        $(
-            impl $trait for NumberType {
-                type Rhs = Self;
-                fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
-                    match (self,rhs) {
-                        (NumberType::UInt8(a), NumberType::UInt8(b))  => Ok(NumberType::UInt8(a.add(b)?)),
-                        (NumberType::Int8(a), NumberType::Int8(b))   => Ok(NumberType::Int8(a.$fname(b)?)),
-                        (NumberType::UInt16(a), NumberType::UInt16(b)) => Ok(NumberType::UInt16(a.$fname(b)?)),
-                        (NumberType::Int16(a), NumberType::Int16(b))  => Ok(NumberType::Int16(a.$fname(b)?)),
-                        (NumberType::UInt32(a), NumberType::UInt32(b)) => Ok(NumberType::UInt32(a.$fname(b)?)),
-                        (NumberType::Int32(a), NumberType::Int32(b))  => Ok(NumberType::Int32(a.$fname(b)?)),
-                        (NumberType::UInt64(a), NumberType::UInt64(b)) => Ok(NumberType::UInt64(a.$fname(b)?)),
-                        (NumberType::Int64(a), NumberType::Int64(b))  => Ok(NumberType::Int64(a.$fname(b)?)),
-                        (NumberType::BFloat16(a), NumberType::BFloat16(b)) => Ok(NumberType::BFloat16(a.$fname(b)?)),
-                        (NumberType::Float16(a), NumberType::Float16(b))  => Ok(NumberType::Float16(a.$fname(b)?)),
-                        (NumberType::Float32(a), NumberType::Float32(b)) => Ok(NumberType::Float32(a.$fname(b)?)),
-                        (NumberType::Float64(a), NumberType::Float64(b))  => Ok(NumberType::Float64(a.$fname(b)?)),
-                        (NumberType::Complex(a), NumberType::Complex(b))  => Ok(NumberType::Complex(a.$fname(b)?)),
+                        (AtomicType::UInt8(a), AtomicType::UInt8(b))  => Ok(AtomicType::UInt8(a.add(b)?)),
+                        (AtomicType::Int8(a), AtomicType::Int8(b))   => Ok(AtomicType::Int8(a.$fname(b)?)),
+                        (AtomicType::UInt16(a), AtomicType::UInt16(b)) => Ok(AtomicType::UInt16(a.$fname(b)?)),
+                        (AtomicType::Int16(a), AtomicType::Int16(b))  => Ok(AtomicType::Int16(a.$fname(b)?)),
+                        (AtomicType::UInt32(a), AtomicType::UInt32(b)) => Ok(AtomicType::UInt32(a.$fname(b)?)),
+                        (AtomicType::Int32(a), AtomicType::Int32(b))  => Ok(AtomicType::Int32(a.$fname(b)?)),
+                        (AtomicType::UInt64(a), AtomicType::UInt64(b)) => Ok(AtomicType::UInt64(a.$fname(b)?)),
+                        (AtomicType::Int64(a), AtomicType::Int64(b))  => Ok(AtomicType::Int64(a.$fname(b)?)),
+                        (AtomicType::BFloat16(a), AtomicType::BFloat16(b)) => Ok(AtomicType::BFloat16(a.$fname(b)?)),
+                        (AtomicType::Float16(a), AtomicType::Float16(b))  => Ok(AtomicType::Float16(a.$fname(b)?)),
+                        (AtomicType::Float32(a), AtomicType::Float32(b)) => Ok(AtomicType::Float32(a.$fname(b)?)),
+                        (AtomicType::Float64(a), AtomicType::Float64(b))  => Ok(AtomicType::Float64(a.$fname(b)?)),
+                        (AtomicType::Complex(a), AtomicType::Complex(b))  => Ok(AtomicType::Complex(a.$fname(b)?)),
                         _ => {unimplemented!()}
                     }
                 }
@@ -225,34 +174,6 @@ delegate_binops_numbertype!(
     Mul mul,
     Div div
 );
-
-// macro_rules! delegate_unops_numbertype {
-//     ($($trait:ident $fname:ident),*) => {
-//         $(
-//             impl $trait for NumberType {
-//                 fn $fname(self) -> Result<Self>{
-//                     match self {
-//                         NumberType::UInt8(a)  => Ok(NumberType::UInt8(a.$fname()?)),
-//                         NumberType::Int8(a)   => Ok(NumberType::Int8(a.$fname()?)),
-//                         NumberType::UInt16(a) => Ok(NumberType::UInt16(a.$fname()?)),
-//                         NumberType::Int16(a)  => Ok(NumberType::Int16(a.$fname()?)),
-//                         NumberType::UInt32(a) => Ok(NumberType::UInt32(a.$fname()?)),
-//                         NumberType::Int32(a)  => Ok(NumberType::Int32(a.$fname()?)),
-//                         NumberType::UInt64(a) => Ok(NumberType::UInt64(a.$fname()?)),
-//                         NumberType::Int64(a)  => Ok(NumberType::Int64(a.$fname()?)),
-//                         NumberType::BFloat16(a) => Ok(NumberType::BFloat16(a.$fname()?)),
-//                         NumberType::Float16(a)  => Ok(NumberType::Float16(a.$fname()?)),
-//                         NumberType::Float32(a) => Ok(NumberType::Float32(a.$fname()?)),
-//                         NumberType::Float64(a)  => Ok(NumberType::Float64(a.$fname()?)),
-//                         NumberType::Complex(a)  => Ok(NumberType::Complex(a.$fname()?)),
-//                         _ => {unimplemented!()}
-//                     }
-//                 }
-//             }
-//         )*
-//     };
-// }
-// delegate_unops_numbertype!(Neg neg);
 
 macro_rules! delegate_binops_std_array {
     ($($trait:ident $fname:ident),*) => {
@@ -305,8 +226,43 @@ delegate_binops_std!(
     Div div (/)
 );
 
+impl<T> Neg for Array<T>
+where
+    T: Neg + Copy,
+{
+    fn neg(self) -> Result<Self> {
+        Ok(Array::new(
+            self.shape(),
+            &self
+                .data()
+                .iter()
+                .map_while(|a| a.neg().ok())
+                .collect::<Vec<T>>(),
+        ))
+    }
+}
+
 impl<T> Inv for T {
     fn inv(self) -> Result<Self> {
         todo!()
     }
 }
+
+impl Neg for AtomicType {
+    fn neg(self) -> Result<Self> where Self: Sized {
+        use AtomicType::*;
+        Ok(match self {
+            Int8(a) => Int8(-a),    
+            Int16(a) => Int16(-a),  
+            Int32(a) => Int32(-a),  
+            Int64(a) => Int64(-a),
+            BFloat16(a) => BFloat16(-a),
+            Float16(a) => Float16(-a),
+            Float32(a) => Float32(-a),
+            Float64(a) => Float64(-a),
+            Complex(a) => Complex(num::Complex::new(-a.re(), a.im())), //subtracts the real
+            _ => return Err(LangError::RuntimeErr("unsupported op".to_string())),
+        })
+    }
+}
+

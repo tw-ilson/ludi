@@ -2,13 +2,14 @@ use libludi::env::{Env, EnvRef};
 use libludi::err::Result;
 use libludi::atomic::*;
 use libludi::parser::Parser;
+use libludi::lex::lex;
 use interpreter::interpret::*;
 
 #[test]
 fn basic_unary() -> Result<()> {
     // assert_eq!(8, std::mem::size_of::<Atom>());
     let e: EnvRef = Env::new(None).into();
-    let r = "-2".to_string().parse()?[0].interpret(e)?;
+    let r = lex("-2").parse()?[0].interpret(e)?;
     assert_eq!(format!("{}",r), "-2");
     Ok(())
 }
