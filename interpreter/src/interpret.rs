@@ -24,10 +24,6 @@ impl Interpret for Stmt {
     fn interpret(self, e: EnvRef) -> InterpretResult {
         match self {
             Stmt::ExprStmt(node) => node.expression.interpret(e),
-            // Stmt::BlockStmt(node) => node.interpret(Env::new(Some(e)).into()),
-            // Stmt::FnStmt(node) => {
-            //     unimplemented!();
-            // }
             Stmt::PrintStmt(node) => {
                 let r = node.expression.interpret(e)?;
                 println!("    {}", r);
@@ -47,15 +43,14 @@ impl Interpret for Expr {
     fn interpret(self, e: EnvRef) -> InterpretResult {
         match self {
             Expr::Frame(node) => node.interpret(e),
-            Expr::Array(node) => node.interpret(e),
             Expr::BinaryOperation(node) => node.interpret(e),
             Expr::UnaryOperation(node) => node.interpret(e),
             Expr::Grouping(node) => node.interpret(e),
             Expr::Literal(node) => node.interpret(e),
-            Expr::AtomicCast(node) => node.interpret(e),
             Expr::Assignment(node) => node.interpret(e),
             Expr::FnCall(node) => node.interpret(e),
-            Expr::FnDef(_) => todo!(),
+            Expr::FnDef(node) => node.interpret(e),
+            Expr::AtomicCast(_) => todo!(),
             Expr::ShapeCast(_) => todo!()
         }
     }
@@ -69,16 +64,15 @@ impl Interpret for FrameNode {
             .collect::<Result<Result<DataType>>>()?
     }
 }
-
-impl Interpret for ArrayNode {
+impl Interpret for FnDefNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
-        Ok(DataType::Array(self.value))
+        todo!()
     }
 }
 
 impl Interpret for FnCallNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
-        unimplemented!();
+        todo!();
     }
 }
 
@@ -90,20 +84,20 @@ impl Interpret for GroupingNode {
 
 impl Interpret for AtomicCastNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
-        // make cast explicit here
-        Ok(DataType::Atomic(self.value))
+        // do something
+        Ok(self.value)
     }
 }
 
 impl Interpret for LiteralNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
-        Ok(DataType::Atomic(self.value))
+        Ok(self.value)
     }
 }
 
 impl Interpret for AssignmentNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
-        Ok(e.get(self.name)?.into_owned())
+        Ok(e.get(self.name)?.into_inner().unwrap())
     }
 }
 
@@ -124,12 +118,11 @@ impl Interpret for BinaryNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
         let left = self.left.interpret(e.clone())?;
         let right = self.right.interpret(e.clone())?;
-        match self.operator.token {
-            Token::PLUS => Ok(Add::add(left, right)?),
-            Token::MINUS => Ok(Sub::sub(left, right)?),
-            Token::STAR => Ok(Mul::mul(left, right)?),
-            Token::SLASH => Ok(Div::div(left, right)?),
-            _ => panic!(),
+        match self.operator {
+            BinaryOpType::ADD => Ok(Add::add(left, right)?),
+            BinaryOpType::SUB => Ok(Sub::sub(left, right)?),
+            BinaryOpType::MUL => Ok(Mul::mul(left, right)?),
+            BinaryOpType::DIV => Ok(Div::div(left, right)?),
         }
     }
 }

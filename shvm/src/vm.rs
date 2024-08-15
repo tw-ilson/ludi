@@ -11,6 +11,7 @@ type Value = DataType;
 struct Module {
     funcs: Vec<FnData>
 }
+
 #[derive(Clone)]
 pub struct BasicBlock(Vec<Operation>);
 
@@ -18,9 +19,6 @@ pub struct BasicBlock(Vec<Operation>);
 trait Evaluate {
     fn evaluate(self) -> Result<()>;
 }
-
-// #[derive(Clone)]
-// pub struct Stack(Vec<Value>); // values on our stack have unbounded size
 
 // the virtual machine
 pub struct ChunkMachine {

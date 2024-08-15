@@ -4,7 +4,7 @@ use crate::tokens::Token;
 use crate::tokens::{Token::IDENTIFIER, TokenData};
 use std::any::Any;
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{RefCell,OnceCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -15,22 +15,20 @@ pub struct Name {
     pub line: usize,
 }
 
-pub type EnvRef<'this, 'prev> = Rc<Env<'this, 'prev>>;
-type Symbol<'a> = Cow<'a, DataType>;
-type EnvMap<'a> = RefCell<HashMap<Name, Symbol<'a>>>;
+pub type EnvRef = Rc<Env>;
+type Symbol = OnceCell< DataType>;
+type EnvMap = RefCell<HashMap<Name, Symbol>>;
 
-pub struct Env<'this, 'prev>
-where
-    'prev: 'this,
+pub struct Env
 {
     // A scoped symbol table
-    table: EnvMap<'this>,
+    table: EnvMap,
     // The outer scope
-    prev: Option<EnvRef<'prev, 'static>>,
+    prev: Option<EnvRef>,
 }
 
-impl Env<'_, '_> {
-    pub fn new<'a, 'b: 'a>(prev: Option<Rc<Env<'b, 'static>>>) -> Env<'a, 'b> {
+impl Env{
+    pub fn new(prev: Option<Rc<Env>>) -> Env {
         Env {
             table: RefCell::new(HashMap::new()),
             prev,
@@ -39,7 +37,7 @@ impl Env<'_, '_> {
     pub fn put(&self, ident: Name, val: DataType) -> Option<Symbol> {
         self.table
             .borrow_mut()
-            .insert(ident, Cow::Owned(val))
+            .insert(ident, val.into())
     }
     pub fn get(&self, ident: Name) -> Result<Symbol> {
         if let Some(val) = self.table.borrow().get(&ident) {
@@ -51,7 +49,7 @@ impl Env<'_, '_> {
         }
     }
 }
-impl Default for Env<'_, '_> {
+impl Default for Env {
     fn default() -> Self {
         Env::new(None)
     }

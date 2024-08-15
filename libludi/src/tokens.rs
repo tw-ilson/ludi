@@ -1,6 +1,7 @@
 use std::hash::Hash;
 
 use crate::{
+    ast::{BinaryOpType, UnaryOpType},
     err::{LangError, Result},
     err_at_tok, parse_err,
 };
@@ -15,6 +16,7 @@ pub enum Token {
     DOT,
     COLON,
     SEMICOLON,
+    GRAPES,
     COMMA,
     UNDERSCORE,
     BACKSLASH,
@@ -31,7 +33,7 @@ pub enum Token {
     GREATER,
     LESS,
 
-    ARROW, 
+    ARROW,
 
     GREATER_EQUAL,
     LESS_EQUAL,
@@ -67,4 +69,27 @@ pub fn same_variant(lhs: &Token, rhs: &Token) -> bool {
 pub struct TokenData {
     pub token: Token,
     pub line: usize,
+}
+
+impl TryFrom<Token> for BinaryOpType {
+    type Error = LangError;
+    fn try_from(value: Token) -> Result<Self> {
+        match value {
+            Token::PLUS => Ok(Self::ADD),
+            Token::MINUS => Ok(Self::SUB),
+            Token::STAR => Ok(Self::MUL),
+            Token::SLASH => Ok(Self::DIV),
+            _ => parse_err!(format!("cannot use {} as binary operator", value)),
+        }
+    }
+}
+impl TryFrom<Token> for UnaryOpType {
+    type Error = LangError;
+    fn try_from(value: Token) -> Result<Self> {
+        match value {
+            Token::MINUS => Ok(Self::NEG),
+            Token::GRAPES => Ok(Self::INV),
+            _ => parse_err!(format!("cannot use {} as unary operator", value)),
+        }
+    }
 }

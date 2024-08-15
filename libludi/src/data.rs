@@ -18,10 +18,11 @@ pub trait Data:
  std::fmt::Debug
 {}
 
-#[derive(derive_more::Display, Clone, Debug, PartialEq)]
+#[derive(derive_more::Display, Debug, PartialEq, Clone )]
 pub enum DataType {
     Array(ArrayType),
     Atomic(AtomicType),
+    // Closure(ClosureType)
 }
 impl Data for DataType {}
 
@@ -34,8 +35,8 @@ pub enum DataTypeTag {
     Int16,
     UInt32,
     Int32,
-    Int64,
     UInt64,
+    Int64,
     BFloat16,
     Float16,
     Float32,
@@ -73,5 +74,28 @@ impl FromIterator<DataType> for Result<DataType> {
                 None => runtime_err!("Frame error: empty frame")?,
             }
         }))
+    }
+}
+
+impl DataTypeTag {
+    fn into_mlir(self, context: &'static melior::Context) -> melior::ir::Type<'static> {
+        use melior::ir::r#type::{Type, IntegerType};
+        match self {
+            Self::UInt8 => IntegerType::unsigned(context, 8).into(),
+            Self::Int8 => IntegerType::signed(context, 8).into(),
+            Self::UInt16 => IntegerType::unsigned(context, 16).into(),
+            Self::Int16 => IntegerType::signed(context, 16).into(),
+            Self::UInt32 => IntegerType::unsigned(context, 32).into(),
+            Self::Int32 => IntegerType::signed(context, 32).into(),
+            Self::UInt64 => IntegerType::unsigned(context, 64).into(),
+            Self::Int64 => IntegerType::signed(context, 64).into(),
+            Self::BFloat16 => Type::bfloat16(context),
+            Self::Float16 => Type::float16(context),
+            Self::Float32 => Type::float32(context),
+            Self::Float64 => Type::float64(context),
+            Self::Complex => todo!(),
+            Self::Character => todo!(),
+            Self::Boolean => todo!(),
+        }
     }
 }

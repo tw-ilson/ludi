@@ -1,11 +1,13 @@
 use crate::tokens::TokenData;
 use crate::env::Name;
+use crate::data::DataType;
 use crate::atomic::AtomicType;
-use crate::array::ArrayType;
+// use crate::array::ArrayType;
 use crate::array::ShapeVec;
+use crate::r#fn::CallSignature;
 
 pub type AstProgram = Vec<Stmt>;
-type NodeRef<T> = Box<T>; // might need this as Arc if we want multitreading parsing
+type NodeRef<T> = Box<T>; 
 macro_rules! define_ast {
     ($(
         $base_name:ident {
@@ -56,9 +58,11 @@ macro_rules! define_nodes {
 }
 
 // define primitives
+#[derive(Copy, Clone, Eq, PartialEq, Debug, derive_more::Display)]
 pub enum BinaryOpType {
     ADD, SUB, MUL, DIV
 }
+#[derive(Copy, Clone, Eq, PartialEq, Debug, derive_more::Display)]
 pub enum UnaryOpType {
     NEG, INV
 }
@@ -71,21 +75,21 @@ pub enum UnaryOpType {
 //      } 
 define_ast! {
     Stmt {
-          ExprStmt ExprStmtNode {expression: Expr}
-        | PrintStmt PrintStmtNode {expression: Expr}
-        | AssignStmt AssignStmtNode {name:Name, initializer: Expr}
+          ExprStmt ExprStmtNode { expression: Expr }
+        | PrintStmt PrintStmtNode { expression: Expr }
+        | AssignStmt AssignStmtNode { name:Name, initializer: Expr }
     }
     Expr {
-          UnaryOperation UnaryNode {operator: UnaryOpType, right: Expr}
-        | BinaryOperation BinaryNode {left: Expr, operator: BinaryOpType, right: Expr}
-        | FnDef FnDefNode {args:Vec<(Name, ShapeVec)>, ret:Option<ShapeVec>, body:Expr}
-        | FnCall FnCallNode {callee: Expr, args: Vec<Expr>}
-        | Grouping GroupingNode {expression: Expr}
+          UnaryOperation UnaryNode { operator: UnaryOpType, right: Expr }
+        | BinaryOperation BinaryNode { left: Expr, operator: BinaryOpType, right: Expr }
+        | FnDef FnDefNode { signature: CallSignature, body:Expr }
+        | FnCall FnCallNode { callee: Expr, args: Vec<Expr> }
+        | Grouping GroupingNode { expression: Expr }
         | Frame FrameNode { expression_list: Vec<Expr> }
-        | Array ArrayNode { value: ArrayType }
-        | Literal LiteralNode {value: AtomicType}
-        | Assignment AssignmentNode {name: Name}
-        | AtomicCast AtomicCastNode {value: AtomicType}
-        | ShapeCast ShapeCastNode {value:ArrayType}
+        // | Array ArrayNode { value: ArrayType }
+        | Literal LiteralNode {value: DataType }
+        | Assignment AssignmentNode {name: Name }
+        | AtomicCast AtomicCastNode {value: DataType }
+        | ShapeCast ShapeCastNode {value: DataType }
     }
 }

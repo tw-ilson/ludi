@@ -1,4 +1,6 @@
 use libludi::ast::*;
+use libludi::r#fn::CallSignature;
+use libludi::data::DataType;
 use libludi::atomic::AtomicType;
 use libludi::env::Name;
 use libludi::parser::*;
@@ -89,7 +91,7 @@ fn scan_ident() {
                 },
                 initializer: Expr::Literal(
                     LiteralNode {
-                        value: AtomicType::Int64(10)
+                        value: DataType::Atomic(AtomicType::Int64(10))
                     }
                     .into()
                 )
@@ -175,23 +177,20 @@ fn binary_expr2() -> anyhow::Result<()> {
                 BinaryNode {
                     left: Literal(
                         LiteralNode {
-                            value: AtomicType::from(TokenData {
+                            value: DataType::Atomic(AtomicType::from(TokenData {
                                 token: FLOAT_LITERAL("75.4".into()),
                                 line: 1,
-                            }),
+                            })),
                         }
                         .into(),
                     ),
-                    operator: TokenData {
-                        token: PLUS,
-                        line: 1,
-                    },
+                    operator: BinaryOpType::ADD,
                     right: Literal(
                         LiteralNode {
-                            value: AtomicType::from(TokenData {
+                            value: DataType::Atomic(AtomicType::from(TokenData {
                                 token: FLOAT_LITERAL("1.006".into()),
                                 line: 1,
-                            }),
+                            })),
                         }
                         .into(),
                     ),
@@ -209,22 +208,20 @@ fn binary_expr2() -> anyhow::Result<()> {
 fn test_fndef() -> anyhow::Result<()> {
     use std::str::FromStr;
     let prg = expression(&mut lex("fn (a[3] b[3] -> [3]) : a + b"))?;
-    dbg!(&prg);
     assert_eq!(
         prg,
         Expr::FnDef(
             FnDefNode {
-                args: vec![
-                    (Name::from_str("a")?, smallvec::smallvec![3]),
-                    (Name::from_str("b")?, smallvec::smallvec![3]),
-                ],
-                ret: Some(smallvec::smallvec![3]),
+                signature: CallSignature {
+                    args: vec![
+                        (Name::from_str("a")?, smallvec::smallvec![3]),
+                        (Name::from_str("b")?, smallvec::smallvec![3]),
+                    ],
+                    ret: Some(smallvec::smallvec![3]),
+                },
                 body: Expr::BinaryOperation(
                     BinaryNode {
-                        operator: TokenData {
-                            token: Token::PLUS,
-                            line: 1
-                        },
+                        operator: BinaryOpType::ADD,
                         left: Expr::Assignment(
                             AssignmentNode {
                                 name: Name::from_str("a")?
@@ -242,6 +239,23 @@ fn test_fndef() -> anyhow::Result<()> {
                 )
             }
             .into()
+        )
+    );
+    Ok(())
+}
+#[test]
+fn test_fncall() -> anyhow::Result<()> {
+    use std::str::FromStr;
+    let prg = expression(&mut lex("foo(1, 2)"))?;
+    assert_eq!(
+        prg, 
+        Expr::FnCall(FnCallNode{
+            callee: Expr::Assignment(AssignmentNode{name: Name::from_str("foo")?}.into()),
+            args: vec![
+                Expr::Literal(LiteralNode{value: DataType::Atomic(AtomicType::Int64(1))}.into()),
+                Expr::Literal(LiteralNode{value: DataType::Atomic(AtomicType::Int64(2))}.into()),
+            ]
+        }.into()
         )
     );
     Ok(())

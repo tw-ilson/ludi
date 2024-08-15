@@ -2,10 +2,12 @@ use crate::{
     array::{Array, ArrayType, ShapeVec},
     ast::*,
     atomic::AtomicType,
+    data::DataType,
     env::Name,
     err::{err_at_tok, LangError, Result},
     lex::{lex, Lexer},
     parse_err,
+    r#fn::CallSignature,
     tokens::{Token, TokenData},
 };
 
@@ -127,7 +129,7 @@ fn equality(tokens: &mut Lexer) -> Result<Expr> {
                         expr = Expr::BinaryOperation(
                             BinaryNode {
                                 left: expr,
-                                operator,
+                                operator: operator.token.try_into()?,
                                 right,
                             }
                             .into(),
@@ -152,7 +154,7 @@ fn comparison(tokens: &mut Lexer) -> Result<Expr> {
                         expr = Expr::BinaryOperation(
                             BinaryNode {
                                 left: expr,
-                                operator,
+                                operator: operator.token.try_into()?,
                                 right,
                             }
                             .into(),
@@ -175,7 +177,7 @@ fn term(tokens: &mut Lexer) -> Result<Expr> {
                         expr = Expr::BinaryOperation(
                             BinaryNode {
                                 left: expr,
-                                operator,
+                                operator: operator.token.try_into()?,
                                 right,
                             }
                             .into(),
@@ -198,7 +200,7 @@ fn factor(tokens: &mut Lexer) -> Result<Expr> {
                         expr = Expr::BinaryOperation(
                             BinaryNode {
                                 left: expr,
-                                operator,
+                                operator: operator.token.try_into()?,
                                 right,
                             }
                             .into(),
@@ -256,7 +258,13 @@ fn fndef(tokens: &mut Lexer) -> Result<Expr> {
         expect_next!(tokens, CLOSE_PAREN)?;
         expect_next!(tokens, COLON)?;
         let body = expression(tokens)?;
-        Ok(Expr::FnDef(FnDefNode { args, ret, body }.into()))
+        Ok(Expr::FnDef(
+            FnDefNode {
+                signature: CallSignature { args, ret },
+                body,
+            }
+            .into(),
+        ))
     } else {
         equality(tokens) // correct?
     }
@@ -264,43 +272,55 @@ fn fndef(tokens: &mut Lexer) -> Result<Expr> {
 
 //TODO:
 fn fncall(tokens: &mut Lexer) -> Result<Expr> {
-    let callee = primary(tokens);
-    // if match_next!(tokens, OPEN_PAREN).is_some() {}
-    // callee
-    todo!()
-}
-fn end_call(tokens: &mut Lexer, callee: Expr) -> Result<Expr> {
-    let args = if match_next!(tokens, CLOSE_PAREN).is_some() {
-        Vec::new()
+    let callee = primary(tokens)?;
+    if match_next!(tokens, OPEN_PAREN).is_some() {
+        let mut args = Vec::<Expr>::new();
+        loop {
+            args.push(expression(tokens)?);
+            if match_next!(tokens, COMMA).is_none() {
+                break;
+            }
+        }
+        expect_next!(tokens, CLOSE_PAREN)?;
+        Ok(
+            Expr::FnCall(FnCallNode { callee, args }.into())
+        )
     } else {
-        (0..)
-            .map_while(|i| {
-                if i == 0 {
-                    Some(expression(tokens))
-                } else {
-                    if match_next!(tokens, COMMA).is_some() {
-                        Some(expression(tokens))
-                    } else {
-                        // maybe add more error checking
-                        None
-                    }
-                }
-            })
-            .collect::<Result<Vec<Expr>>>()?
-    };
-    Ok(Expr::FnCall(FnCallNode { callee, args }.into()))
+        Ok(callee)
+    }
 }
+// fn end_call(tokens: &mut Lexer, callee: Expr) -> Result<Expr> {
+//     let args = if match_next!(tokens, CLOSE_PAREN).is_some() {
+//         Vec::new()
+//     } else {
+//         (0..)
+//             .map_while(|i| {
+//                 if i == 0 {
+//                     Some(expression(tokens))
+//                 } else {
+//                     if match_next!(tokens, COMMA).is_some() {
+//                         Some(expression(tokens))
+//                     } else {
+//                         // maybe add more error checking
+//                         None
+//                     }
+//                 }
+//             })
+//             .collect::<Result<Vec<Expr>>>()?
+//     };
+//     Ok(Expr::FnCall(FnCallNode { callee, args }.into()))
+// }
 fn unary(tokens: &mut Lexer) -> Result<Expr> {
     if let Some(operator) = match_next!(tokens, BANG | MINUS) {
         Ok(Expr::UnaryOperation(
             UnaryNode {
-                operator,
+                operator: operator.token.try_into()?,
                 right: unary(tokens)?,
             }
             .into(),
         ))
     } else {
-        primary(tokens)
+        fncall(tokens)
     }
 }
 fn array_frame(tokens: &mut Lexer) -> Result<Expr> {
@@ -346,14 +366,19 @@ fn atomic_sequence(tokens: &mut Lexer) -> Result<Vec<AtomicType>> {
 fn sequence(tokens: &mut Lexer) -> Result<Expr> {
     let seq = atomic_sequence(tokens)?;
     if seq.len() > 1 {
-        Ok(Expr::Array(
-            ArrayNode {
-                value: ArrayType::parse_seq(seq)?,
+        Ok(Expr::Literal(
+            LiteralNode {
+                value: DataType::Array(ArrayType::parse_seq(seq)?),
             }
             .into(),
         ))
     } else {
-        Ok(Expr::Literal(LiteralNode { value: seq[0] }.into()))
+        Ok(Expr::Literal(
+            LiteralNode {
+                value: DataType::Atomic(seq[0]),
+            }
+            .into(),
+        ))
     }
 }
 fn primary(tokens: &mut Lexer) -> Result<Expr> {
@@ -373,10 +398,12 @@ fn primary(tokens: &mut Lexer) -> Result<Expr> {
             }
             Err(e) => Err(e),
         }
-    } else if let Some(value) = match_next!(tokens, FALSE | TRUE) {
+    } else if let Some(value) =
+        match_next!(tokens, FALSE | TRUE | INTEGER_LITERAL(_) | FLOAT_LITERAL(_))
+    {
         Ok(Expr::Literal(
             LiteralNode {
-                value: value.into(),
+                value: DataType::Atomic(value.into()),
             }
             .into(),
         ))
