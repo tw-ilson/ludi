@@ -3,13 +3,13 @@ use std::process::Command;
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 pub mod runtime_x86 {
     pub fn cpuid() {
-        let information = cupid::master();
-        println!("{:#?}", information);
-        if let Some(information) = information {
-            if information.avx2() {
-                println!("AVX2 Available");
-            }
-        }
+        // let information = cupid::master();
+        // println!("{:#?}", information);
+        // if let Some(information) = information {
+        //     if information.avx2() {
+        //         println!("AVX2 Available");
+        //     }
+        // }
     }
     #[cfg(target_feature = "avx2")]
     fn avx() {

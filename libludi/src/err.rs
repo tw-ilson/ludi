@@ -55,7 +55,7 @@ macro_rules! compile_err {
         Err(LangError::CompileErr($message.to_string()))
     };
 }
-pub use err_at_tok;
-pub use runtime_err;
-pub use parse_err;
-pub use compile_err;
+pub(crate) use err_at_tok;
+pub(crate) use runtime_err;
+pub(crate) use parse_err;
+pub(crate) use compile_err;

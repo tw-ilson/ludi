@@ -7,7 +7,5 @@ edition = "2021"
 
 [dependencies]
 libludi={path="../libludi/"}
-melior = { version = "0.18.5", features = ["ods-dialects"], path="../../melior/melior" }
-tblgen = { version = "0.3.6", features = ["llvm18-0"], default-features = false, package="tblgen-alt", path = "../../tblgen-rs-alt" }
 libc = "0.2.155"
 bytemuck = {version="1.16.1", features = ["aarch64_simd"]}

@@ -31,23 +31,10 @@ def Ludi_Dialect : Dialect {
 class Ludi_Op<string mnemonic, list<Trait> traits = []> :
     Op<Ludi_Dialect, mnemonic, traits>;
 
-def AtomicF64ConstantOp: Ludi_Op<"atomicf64constant"> {
-    let arguments = (ins F64Attr:$value);
-    let results = (outs F64);
-    let hasVerifier = 1;
-    let builders = [
-        OpBuilder<(ins "double":$value)>
-    ];
-}
+// def ConstantOp: Ludi_Op<"constant"> {
+//     let arguments = (ins TypedAttr:$value);
+// }
 
-def ArrayF64ConstantOp: Ludi_Op<"arrayf64constant"> {
-    let arguments = (ins DenseF64ArrayAttr:$value);
-    let results = (outs F64Tensor);
-    let hasVerifier = 1;
-    let builders = [ 
-        OpBuilder<(ins "DenseF64ArrayAttr":$value)>
-    ];
-}
 
 def AtomicF32ConstantOp: Ludi_Op<"atomicf32constant"> {
     let arguments = (ins F32Attr:$value);

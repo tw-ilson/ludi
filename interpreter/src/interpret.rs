@@ -29,12 +29,12 @@ impl Interpret for Stmt {
                 println!("    {}", r);
                 Ok(r)
             }
-            Stmt::AssignStmt(node) => {
-                // &node.name.name
-                let val = node.initializer.interpret(e.clone())?;
-                e.put(node.name, val.clone());
-                Ok(val)
-            }
+            // Stmt::AssignStmt(node) => {
+            //     // &node.name.name
+            //     let val = node.initializer.interpret(e.clone())?;
+            //     e.put(node.name, val.clone());
+            //     Ok(val)
+            // }
         }
     }
 }
@@ -47,9 +47,10 @@ impl Interpret for Expr {
             Expr::UnaryOperation(node) => node.interpret(e),
             Expr::Grouping(node) => node.interpret(e),
             Expr::Literal(node) => node.interpret(e),
-            Expr::Assignment(node) => node.interpret(e),
+            Expr::Term(node) => node.interpret(e),
             Expr::FnCall(node) => node.interpret(e),
             Expr::FnDef(node) => node.interpret(e),
+            Expr::Let(_) => todo!(),
             Expr::AtomicCast(_) => todo!(),
             Expr::ShapeCast(_) => todo!()
         }
@@ -95,13 +96,13 @@ impl Interpret for LiteralNode {
     }
 }
 
-impl Interpret for AssignmentNode {
+impl Interpret for TermNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
         Ok(e.get(self.name)?.into_inner().unwrap())
     }
 }
 
-impl Interpret for UnaryNode {
+impl Interpret for UnaryOperationNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
         todo!()
         //         match self.operator.token {
@@ -114,7 +115,7 @@ impl Interpret for UnaryNode {
     }
 }
 
-impl Interpret for BinaryNode {
+impl Interpret for BinaryOperationNode {
     fn interpret(self, e: EnvRef) -> InterpretResult {
         let left = self.left.interpret(e.clone())?;
         let right = self.right.interpret(e.clone())?;

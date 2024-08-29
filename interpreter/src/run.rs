@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 
 use crate::interpret::Interpret;
-use libludi::ast::AstProgram;
+use libludi::ast::ParseTree;
 use libludi::env::{Env, EnvRef};
 use libludi::err::{LangError, Result};
 use libludi::parser::Parser;
@@ -59,7 +59,7 @@ pub fn run(source: &str, e: EnvRef) -> Result<LudiExit> {
             println!("{:?}", t.token);
         })
     };
-    let p: AstProgram = tokens.parse().unwrap();
+    let p: ParseTree = tokens.parse().unwrap();
     for stmt in p {
         if dump_ast {
             println!("{:#?}", &stmt);

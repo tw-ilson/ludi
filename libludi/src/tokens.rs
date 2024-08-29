@@ -16,8 +16,9 @@ pub enum Token {
     DOT,
     COLON,
     SEMICOLON,
-    GRAPES,
+    PERCENT,
     COMMA,
+    VBAR, 
     UNDERSCORE,
     BACKSLASH,
     OPEN_BRACKET,
@@ -45,6 +46,7 @@ pub enum Token {
     SLASH_EQUAL,
 
     FN,
+    IN,
     LET,
     PRINT,
     TRUE,
@@ -88,7 +90,7 @@ impl TryFrom<Token> for UnaryOpType {
     fn try_from(value: Token) -> Result<Self> {
         match value {
             Token::MINUS => Ok(Self::NEG),
-            Token::GRAPES => Ok(Self::INV),
+            Token::PERCENT => Ok(Self::INV),
             _ => parse_err!(format!("cannot use {} as unary operator", value)),
         }
     }

@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
-use shvm::hwquery::runtime_arm;
+// use shvm::hwquery::runtime_arm;
 
 fn main() {
-    unsafe {runtime_arm::neon();}
+    // unsafe {runtime_arm::neon();}
 }

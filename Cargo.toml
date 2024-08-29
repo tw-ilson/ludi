@@ -2,6 +2,6 @@
   members=[
     "libludi",
     "interpreter",
-    "shvm"
+    # "shvm" -- need to rethink it
     ]
   resolver="2"

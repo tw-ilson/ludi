@@ -9,7 +9,6 @@ use crate::array::{Array, ArrayType, ArrayProps};
 use crate::atomic::{AtomicType};
 use crate::data::{Data, DataType};
 use crate::err::{LangError, Result};
-use either::Either;
 use itertools::izip;
 use num::complex::ComplexFloat;
 use num::Complex;

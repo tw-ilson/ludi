@@ -9,12 +9,15 @@ edition = "2021"
 ambassador = "0.3.6"
 anyhow = "1.0.86"
 derive_more = "0.99.17"
-either = "1.12.0"
 half = "2.4.1"
 itertools = "0.13.0"
 num = "0.4.3"
 smallvec = "1.13.2"
 thiserror = "1.0.61"
 unicode-segmentation = "1.11.0"
-melior = { version = "0.18.5", features = ["ods-dialects"], path="../../melior/melior" }
-tblgen = { version = "0.3.6", features = ["llvm18-0"], default-features = false, package="tblgen-alt", path = "../../tblgen-rs-alt" }
+melior = { version = "0.18.5", features = ["ods-dialects"], path="../../cloned/melior/melior" }
+paste = "1.0.15"
+
+[dev-dependencies]
+pretty_assertions = "1.4.0"
+

@@ -7,7 +7,6 @@ use crate::{
     err::{err_at_tok, LangError, Result},
     lex::{lex, Lexer},
     parse_err,
-    r#fn::CallSignature,
     tokens::{Token, TokenData},
 };
 
@@ -16,11 +15,11 @@ use itertools::Itertools;
 use Token::*;
 
 pub trait Parser {
-    fn parse(&mut self) -> Result<Vec<Stmt>>;
+    fn parse(&mut self) -> Result<Vec<Expr>>;
 }
 impl<'a> Parser for Lexer<'a> {
-    fn parse(&mut self) -> Result<Vec<Stmt>> {
-        Ok((0..).map_while(|_| declaration(self).ok()).collect())
+    fn parse(&mut self) -> Result<Vec<Expr>> {
+        Ok((0..).map_while(|_| expression(self).ok()).collect())
     }
 }
 
@@ -58,66 +57,73 @@ macro_rules! expect_next {
     };
 }
 
-pub fn declaration(tokens: &mut Lexer) -> Result<Stmt> {
-    let mut tokens2 = tokens.clone();
-    if let Some(name) = match_next!(tokens, IDENTIFIER(..)) {
-        if match_next!(tokens, EQUAL).is_some() {
-            Ok(Stmt::AssignStmt(
-                AssignStmtNode {
-                    name: name.try_into()?,
-                    initializer: expression(tokens)?,
-                }
-                .into(),
-            ))
-        } else {
-            statement(&mut tokens2)
-        }
-    } else {
-        statement(tokens)
-    }
-}
+// pub fn declaration(tokens: &mut Lexer) -> Result<Stmt> {
+//     let mut tokens2 = tokens.clone();
+//     if let Some(name) = match_next!(tokens, IDENTIFIER(..)) {
+//         if match_next!(tokens, EQUAL).is_some() {
+//             Ok(Expr::Let(
+//                 LetNode {
+//                     name: name.try_into()?,
+//                     initializer: expression(tokens)?,
+//                     region: None,
+//                 }
+//                 .into(),
+//             ))
+//         } else {
+//             statement(&mut tokens2)
+//         }
+//     } else {
+//         statement(tokens)
+//     }
+// }
 
-pub fn statement(tokens: &mut Lexer) -> Result<Stmt> {
-    if match_next!(tokens, PRINT).is_some() {
-        Ok(Stmt::PrintStmt(
-            PrintStmtNode {
-                expression: expression(tokens)?,
-            }
-            .into(),
-        ))
-    // } else if match_next!(tokens, OPEN_BRACE).is_some() {
-    //     block(tokens)
-    } else {
-        Ok(Stmt::ExprStmt(
-            ExprStmtNode {
-                expression: expression(tokens)?,
-            }
-            .into(),
-        ))
-    }
-    // match_next!(tokens, SEMICOLON).expect("expected semicolon")
-}
+// pub fn statement(tokens: &mut Lexer) -> Result<Stmt> {
+//     if match_next!(tokens, PRINT).is_some() {
+//         Ok(Stmt::PrintStmt(
+//             PrintStmtNode {
+//                 expression: expression(tokens)?,
+//             }
+//             .into(),
+//         ))
+//     // } else if match_next!(tokens, OPEN_BRACE).is_some() {
+//     //     block(tokens)
+//     } else {
+//         Ok(Stmt::ExprStmt(
+//             ExprStmtNode {
+//                 expression: expression(tokens)?,
+//             }
+//             .into(),
+//         ))
+//     }
+//     // match_next!(tokens, SEMICOLON).expect("expected semicolon")
+// }
 
 pub fn expression(tokens: &mut Lexer) -> Result<Expr> {
-    // if match_next!(tokens, IF).is_some() {
-    //     Ok(Expr::Conditional(
-    //         ConditionalNode {
-    //             cond: expression(tokens)?,
-    //             body: statement(tokens)?,
-    //             elsebody: {
-    //                 if match_next!(tokens, ELSE).is_some() {
-    //                     statement(tokens)?.into()
-    //                 } else {
-    //                     None
-    //                 }
-    //             },
-    //         }
-    //         .into(),
-    //     ))
-    // } else {
-    // equality(tokens)
+    letexpr(tokens)
+}
+
+fn letexpr(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, LET).is_some() {
+        let name = expect_next!(tokens, IDENTIFIER(..))?;
+        expect_next!(tokens, EQUAL)?;
+        Ok(Expr::Let(
+            LetNode {
+                name: name.try_into()?,
+                initializer: value(tokens)?,
+                region: {
+                    expect_next!(tokens, IN | SEMICOLON)?;
+                    Some(expression(tokens)?)
+                },
+            }
+            .into(),
+        ))
+    } else {
+        value(tokens)
+    }
+}
+
+fn value(tokens: &mut Lexer) -> Result<Expr> {
     fndef(tokens)
-    // }
 }
 
 fn equality(tokens: &mut Lexer) -> Result<Expr> {
@@ -127,7 +133,7 @@ fn equality(tokens: &mut Lexer) -> Result<Expr> {
                 match comparison(tokens) {
                     Ok(right) => {
                         expr = Expr::BinaryOperation(
-                            BinaryNode {
+                            BinaryOperationNode {
                                 left: expr,
                                 operator: operator.token.try_into()?,
                                 right,
@@ -152,7 +158,7 @@ fn comparison(tokens: &mut Lexer) -> Result<Expr> {
                 match term(tokens) {
                     Ok(right) => {
                         expr = Expr::BinaryOperation(
-                            BinaryNode {
+                            BinaryOperationNode {
                                 left: expr,
                                 operator: operator.token.try_into()?,
                                 right,
@@ -175,7 +181,7 @@ fn term(tokens: &mut Lexer) -> Result<Expr> {
                 match factor(tokens) {
                     Ok(right) => {
                         expr = Expr::BinaryOperation(
-                            BinaryNode {
+                            BinaryOperationNode {
                                 left: expr,
                                 operator: operator.token.try_into()?,
                                 right,
@@ -198,7 +204,7 @@ fn factor(tokens: &mut Lexer) -> Result<Expr> {
                 match unary(tokens) {
                     Ok(right) => {
                         expr = Expr::BinaryOperation(
-                            BinaryNode {
+                            BinaryOperationNode {
                                 left: expr,
                                 operator: operator.token.try_into()?,
                                 right,
@@ -235,7 +241,8 @@ fn shapedef(tokens: &mut Lexer) -> Result<ShapeVec> {
         Ok(smallvec::smallvec![])
     }
 }
-//TODO:
+
+//syntax sugar for fn def
 fn fndef(tokens: &mut Lexer) -> Result<Expr> {
     if match_next!(tokens, FN).is_some() {
         expect_next!(tokens, OPEN_PAREN)?;
@@ -266,11 +273,41 @@ fn fndef(tokens: &mut Lexer) -> Result<Expr> {
             .into(),
         ))
     } else {
-        equality(tokens) // correct?
+        equality(tokens) // NOTE: is this correct?
+    }
+}
+fn closure(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, VBAR).is_some() {
+        let args: Vec<(Name, ShapeVec)> = (0..)
+            .map_while(|_| {
+                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
+                    Some((|| -> Result<(Name, ShapeVec)> {
+                        Ok((name.try_into()?, shapedef(tokens)?))
+                    })())
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<(Name, ShapeVec)>>>()?;
+        let ret = if match_next!(tokens, ARROW).is_some() {
+            Some(shapedef(tokens)?)
+        } else {
+            None
+        };
+        expect_next!(tokens, VBAR)?;
+        let body = expression(tokens)?;
+        Ok(Expr::FnDef(
+            FnDefNode {
+                signature: CallSignature { args, ret },
+                body,
+            }
+            .into(),
+        ))
+    } else {
+        expression(tokens) // NOTE: is this correct?
     }
 }
 
-//TODO:
 fn fncall(tokens: &mut Lexer) -> Result<Expr> {
     let callee = primary(tokens)?;
     if match_next!(tokens, OPEN_PAREN).is_some() {
@@ -282,38 +319,16 @@ fn fncall(tokens: &mut Lexer) -> Result<Expr> {
             }
         }
         expect_next!(tokens, CLOSE_PAREN)?;
-        Ok(
-            Expr::FnCall(FnCallNode { callee, args }.into())
-        )
+        Ok(Expr::FnCall(FnCallNode { callee, args }.into()))
     } else {
         Ok(callee)
     }
 }
-// fn end_call(tokens: &mut Lexer, callee: Expr) -> Result<Expr> {
-//     let args = if match_next!(tokens, CLOSE_PAREN).is_some() {
-//         Vec::new()
-//     } else {
-//         (0..)
-//             .map_while(|i| {
-//                 if i == 0 {
-//                     Some(expression(tokens))
-//                 } else {
-//                     if match_next!(tokens, COMMA).is_some() {
-//                         Some(expression(tokens))
-//                     } else {
-//                         // maybe add more error checking
-//                         None
-//                     }
-//                 }
-//             })
-//             .collect::<Result<Vec<Expr>>>()?
-//     };
-//     Ok(Expr::FnCall(FnCallNode { callee, args }.into()))
-// }
+
 fn unary(tokens: &mut Lexer) -> Result<Expr> {
     if let Some(operator) = match_next!(tokens, BANG | MINUS) {
         Ok(Expr::UnaryOperation(
-            UnaryNode {
+            UnaryOperationNode {
                 operator: operator.token.try_into()?,
                 right: unary(tokens)?,
             }
@@ -383,8 +398,8 @@ fn sequence(tokens: &mut Lexer) -> Result<Expr> {
 }
 fn primary(tokens: &mut Lexer) -> Result<Expr> {
     if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-        Ok(Expr::Assignment(
-            AssignmentNode {
+        Ok(Expr::Term(
+            TermNode {
                 name: name.try_into()?,
             }
             .into(),

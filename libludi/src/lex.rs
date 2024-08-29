@@ -1,24 +1,26 @@
+#[rustfmt::skip]
 macro_rules! nums {
     () => {
         "0"| "1" | "2" | "3"| "4"| "5" | "6" | "7" | "8"| "9"
     };
 }
+#[rustfmt::skip]
 macro_rules! alphabet {
     () => {
         "a"|"b"|"c"|"d"|"e"|"f"|"g"|"h"|"i"|"j"|"k"|"l"|"m"|
             "n"|"o"|"p"|"q"|"r"|"s"|"t"|"u"|"v"|"w"|"x"|"y"|"z"
     };
 }
+#[rustfmt::skip]
 macro_rules! delims {
     () => {
-        "+" | "-" | "*" | "/" | ">" | "<" | "." | ";" | "," | "[" | "]" | "{" | "}"
-                | "(" | ")"
+        "+"|"-"|"*"|"/"|">"|"<"|"."|";"|","|"["|"]"|"{"|"}"|"("|")"|"|"
     };
 }
 pub use crate::tokens::*;
 use std::iter::Peekable;
 use std::str::Chars;
-use unicode_segmentation::{UnicodeSegmentation, Graphemes};
+use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 use Token::*;
 
 pub type Lexer<'a> = Peekable<TokenStream<'a>>;
@@ -41,13 +43,13 @@ impl<'a> Iterator for TokenStream<'a> {
                 Some("\n") => {
                     self.line += 1;
                     continue;
-                },
+                }
                 Some(" " | "\t") => {
                     continue;
-                },
+                }
                 Some(c) => {
-                        charlist.push_str(c);
-                },
+                    charlist.push_str(c);
+                }
                 None => {
                     if charlist.is_empty() {
                         return None;
@@ -106,7 +108,13 @@ impl<'a> TokenStream<'a> {
         }
         //STRING LITERALS
         if in_quote {
-            charlist.push_str(&self.source.by_ref().take_while(|c| !matches!(c, &"\"")).collect::<String>());
+            charlist.push_str(
+                &self
+                    .source
+                    .by_ref()
+                    .take_while(|c| !matches!(c, &"\""))
+                    .collect::<String>(),
+            );
             let s: String = charlist[1..].to_owned();
             return Some(STRING_LITERAL(s));
         }
@@ -148,7 +156,7 @@ impl<'a> TokenStream<'a> {
             } else if let Some(&">") = self.source.peek() {
                 self.source.next();
                 ARROW
-            }else {
+            } else {
                 MINUS
             }),
             "*" => Some(if trailing_equal {
@@ -191,6 +199,7 @@ impl<'a> TokenStream<'a> {
             ":" => Some(COLON),
             ";" => Some(SEMICOLON),
             "_" => Some(UNDERSCORE),
+            "|" => Some(VBAR),
             "\\" => Some(BACKSLASH),
             "," => Some(COMMA),
             "[" => Some(OPEN_BRACKET),
@@ -205,6 +214,7 @@ impl<'a> TokenStream<'a> {
             "or" => Some(OR),
             "fn" => Some(FN),
             "let" => Some(LET),
+            "in" => Some(IN),
             "print" => Some(PRINT),
             "array" => Some(ARRAY),
             "frame" => Some(FRAME),
@@ -221,5 +231,3 @@ impl<'a> TokenStream<'a> {
         tok
     }
 }
-
-

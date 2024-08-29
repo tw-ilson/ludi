@@ -1,11 +1,12 @@
 use libludi::ast::*;
-use libludi::r#fn::CallSignature;
-use libludi::data::DataType;
 use libludi::atomic::AtomicType;
+use libludi::data::DataType;
 use libludi::env::Name;
-use libludi::parser::*;
 use libludi::lex::lex;
+use libludi::parser::*;
 use libludi::tokens::*;
+use pretty_assertions::{assert_eq, assert_ne};
+use std::str::FromStr;
 use std::vec;
 
 #[test]
@@ -71,34 +72,176 @@ fn scan_string_literal() {
 }
 
 #[test]
-fn scan_ident() {
-    let src = "a = 10".to_string();
-    use libludi::tokens::Token::*;
+fn parse_let() -> anyhow::Result<()> {
+    let expr = lex("let a = 10").parse()?;
     assert_eq!(
-        lex(&src).next().unwrap(),
-        TokenData {
-            token: IDENTIFIER("a".to_string()),
-            line: 1
-        }
+        expr[0],
+        let_node(
+            Name::from_str("a")?,
+            literal_node(DataType::Atomic(AtomicType::Int64(10))),
+            None
+        )
     );
+    Ok(())
+}
+
+#[test]
+fn parse_let_with_body() -> anyhow::Result<()> {
+    let expr = lex("let a = 2 in a+2").parse()?;
     assert_eq!(
-        lex("a = 10").parse().expect("failed to parse")[0],
-        Stmt::AssignStmt(
-            AssignStmtNode {
+        expr[0],
+        Expr::Let(
+            LetNode {
                 name: libludi::env::Name {
                     name: "a".into(),
                     line: 1
                 },
                 initializer: Expr::Literal(
                     LiteralNode {
-                        value: DataType::Atomic(AtomicType::Int64(10))
+                        value: DataType::Atomic(AtomicType::Int64(2))
                     }
                     .into()
-                )
+                ),
+                region: Some(Expr::BinaryOperation(
+                    BinaryOperationNode {
+                        left: Expr::Term(
+                            TermNode {
+                                name: libludi::env::Name {
+                                    name: "a".into(),
+                                    line: 1
+                                }
+                            }
+                            .into()
+                        ),
+                        right: Expr::Literal(
+                            LiteralNode {
+                                value: DataType::Atomic(AtomicType::Int64(2))
+                            }
+                            .into()
+                        ),
+                        operator: BinaryOpType::ADD,
+                    }
+                    .into()
+                ))
             }
             .into()
         )
     );
+    Ok(())
+}
+#[test]
+fn let_with_body_complex() -> anyhow::Result<()> {
+    let expr = lex("let a = 2 in let b = 4 in let c = a + b in foo(a, b, c)").parse()?;
+    assert_eq!(
+        expr[0],
+        Expr::Let(
+            LetNode {
+                name: libludi::env::Name {
+                    name: "a".into(),
+                    line: 1
+                },
+                initializer: Expr::Literal(
+                    LiteralNode {
+                        value: DataType::Atomic(AtomicType::Int64(2))
+                    }
+                    .into()
+                ),
+                region: Some(Expr::Let(
+                    LetNode {
+                        name: libludi::env::Name {
+                            name: "b".into(),
+                            line: 1
+                        },
+                        initializer: Expr::Literal(
+                            LiteralNode {
+                                value: DataType::Atomic(AtomicType::Int64(4))
+                            }
+                            .into()
+                        ),
+                        region: Some(Expr::Let(
+                            LetNode {
+                                name: libludi::env::Name {
+                                    name: "c".into(),
+                                    line: 1
+                                },
+                                initializer: Expr::BinaryOperation(
+                                    BinaryOperationNode {
+                                        left: Expr::Term(
+                                            TermNode {
+                                                name: libludi::env::Name {
+                                                    name: "a".into(),
+                                                    line: 1
+                                                }
+                                            }
+                                            .into()
+                                        ),
+                                        right: Expr::Term(
+                                            TermNode {
+                                                name: libludi::env::Name {
+                                                    name: "b".into(),
+                                                    line: 1
+                                                }
+                                            }
+                                            .into()
+                                        ),
+                                        operator: BinaryOpType::ADD,
+                                    }
+                                    .into()
+                                ),
+                                region: Some(Expr::FnCall(
+                                    FnCallNode {
+                                        callee: Expr::Term(
+                                            TermNode {
+                                                name: libludi::env::Name {
+                                                    name: "foo".into(),
+                                                    line: 1
+                                                }
+                                            }
+                                            .into()
+                                        ),
+                                        args: vec![
+                                            Expr::Term(
+                                                TermNode {
+                                                    name: libludi::env::Name {
+                                                        name: "a".into(),
+                                                        line: 1
+                                                    }
+                                                }
+                                                .into()
+                                            ),
+                                            Expr::Term(
+                                                TermNode {
+                                                    name: libludi::env::Name {
+                                                        name: "b".into(),
+                                                        line: 1
+                                                    }
+                                                }
+                                                .into()
+                                            ),
+                                            Expr::Term(
+                                                TermNode {
+                                                    name: libludi::env::Name {
+                                                        name: "c".into(),
+                                                        line: 1
+                                                    }
+                                                }
+                                                .into()
+                                            )
+                                        ]
+                                    }
+                                    .into()
+                                ))
+                            }
+                            .into()
+                        )),
+                    }
+                    .into()
+                ))
+            }
+            .into()
+        )
+    );
+    Ok(())
 }
 
 #[test]
@@ -128,7 +271,7 @@ fn scan_stmts() {
 //     let s_test = &Stmt::ExprStmt(
 //         ExprStmtNode {
 //             expression: Binary(
-//                 BinaryNode {
+//                 BinaryOperationNode {
 //                     left: AtomicCast(
 //                         AtomicCastNode {
 //                             value: LiteralNode {
@@ -171,29 +314,24 @@ fn binary_expr2() -> anyhow::Result<()> {
     use Token::*;
     let s = lex("75.4 + 1.006").parse()?;
 
-    let s_test = Stmt::ExprStmt(
-        ExprStmtNode {
-            expression: BinaryOperation(
-                BinaryNode {
-                    left: Literal(
-                        LiteralNode {
-                            value: DataType::Atomic(AtomicType::from(TokenData {
-                                token: FLOAT_LITERAL("75.4".into()),
-                                line: 1,
-                            })),
-                        }
-                        .into(),
-                    ),
-                    operator: BinaryOpType::ADD,
-                    right: Literal(
-                        LiteralNode {
-                            value: DataType::Atomic(AtomicType::from(TokenData {
-                                token: FLOAT_LITERAL("1.006".into()),
-                                line: 1,
-                            })),
-                        }
-                        .into(),
-                    ),
+    let s_test = BinaryOperation(
+        BinaryOperationNode {
+            left: Literal(
+                LiteralNode {
+                    value: DataType::Atomic(AtomicType::from(TokenData {
+                        token: FLOAT_LITERAL("75.4".into()),
+                        line: 1,
+                    })),
+                }
+                .into(),
+            ),
+            operator: BinaryOpType::ADD,
+            right: Literal(
+                LiteralNode {
+                    value: DataType::Atomic(AtomicType::from(TokenData {
+                        token: FLOAT_LITERAL("1.006".into()),
+                        line: 1,
+                    })),
                 }
                 .into(),
             ),
@@ -201,6 +339,57 @@ fn binary_expr2() -> anyhow::Result<()> {
         .into(),
     );
     assert_eq!(s[0], s_test);
+    Ok(())
+}
+#[test]
+fn test_binary_operation() -> anyhow::Result<()> {
+    use std::str::FromStr;
+    let prg = expression(&mut lex("a + b * c - d"))?;
+    assert_eq!(
+        prg,
+        Expr::BinaryOperation(
+            BinaryOperationNode {
+                operator: BinaryOpType::SUB,
+                left: Expr::BinaryOperation(
+                    BinaryOperationNode {
+                        operator: BinaryOpType::ADD,
+                        left: Expr::Term(
+                            TermNode {
+                                name: Name::from_str("a")?
+                            }
+                            .into()
+                        ),
+                        right: Expr::BinaryOperation(
+                            BinaryOperationNode {
+                                operator: BinaryOpType::MUL,
+                                left: Expr::Term(
+                                    TermNode {
+                                        name: Name::from_str("b")?
+                                    }
+                                    .into()
+                                ),
+                                right: Expr::Term(
+                                    TermNode {
+                                        name: Name::from_str("c")?
+                                    }
+                                    .into()
+                                )
+                            }
+                            .into()
+                        )
+                    }
+                    .into()
+                ),
+                right: Expr::Term(
+                    TermNode {
+                        name: Name::from_str("d")?
+                    }
+                    .into()
+                )
+            }
+            .into()
+        )
+    );
     Ok(())
 }
 
@@ -220,16 +409,16 @@ fn test_fndef() -> anyhow::Result<()> {
                     ret: Some(smallvec::smallvec![3]),
                 },
                 body: Expr::BinaryOperation(
-                    BinaryNode {
+                    BinaryOperationNode {
                         operator: BinaryOpType::ADD,
-                        left: Expr::Assignment(
-                            AssignmentNode {
+                        left: Expr::Term(
+                            TermNode {
                                 name: Name::from_str("a")?
                             }
                             .into()
                         ),
-                        right: Expr::Assignment(
-                            AssignmentNode {
+                        right: Expr::Term(
+                            TermNode {
                                 name: Name::from_str("b")?
                             }
                             .into()
@@ -244,18 +433,148 @@ fn test_fndef() -> anyhow::Result<()> {
     Ok(())
 }
 #[test]
+fn test_fndef_complex_body() -> anyhow::Result<()> {
+    use std::str::FromStr;
+    let prg = expression(&mut lex("fn (x[5] y[5] -> [5]) : (x + y) * 2"))?;
+    assert_eq!(
+        prg,
+        Expr::FnDef(
+            FnDefNode {
+                signature: CallSignature {
+                    args: vec![
+                        (Name::from_str("x")?, smallvec::smallvec![5]),
+                        (Name::from_str("y")?, smallvec::smallvec![5]),
+                    ],
+                    ret: Some(smallvec::smallvec![5]),
+                },
+                body: Expr::BinaryOperation(
+                    BinaryOperationNode {
+                        operator: BinaryOpType::MUL,
+                        left: Expr::Grouping(
+                            GroupingNode {
+                                expression: Expr::BinaryOperation(
+                                    BinaryOperationNode {
+                                        operator: BinaryOpType::ADD,
+                                        left: Expr::Term(
+                                            TermNode {
+                                                name: Name::from_str("x")?
+                                            }
+                                            .into()
+                                        ),
+                                        right: Expr::Term(
+                                            TermNode {
+                                                name: Name::from_str("y")?
+                                            }
+                                            .into()
+                                        )
+                                    }
+                                    .into()
+                                )
+                            }
+                            .into()
+                        ),
+                        right: Expr::Literal(
+                            LiteralNode {
+                                value: DataType::Atomic(AtomicType::Int64(2))
+                            }
+                            .into()
+                        )
+                    }
+                    .into()
+                )
+            }
+            .into()
+        )
+    );
+    Ok(())
+}
+
+#[test]
 fn test_fncall() -> anyhow::Result<()> {
     use std::str::FromStr;
     let prg = expression(&mut lex("foo(1, 2)"))?;
     assert_eq!(
-        prg, 
-        Expr::FnCall(FnCallNode{
-            callee: Expr::Assignment(AssignmentNode{name: Name::from_str("foo")?}.into()),
-            args: vec![
-                Expr::Literal(LiteralNode{value: DataType::Atomic(AtomicType::Int64(1))}.into()),
-                Expr::Literal(LiteralNode{value: DataType::Atomic(AtomicType::Int64(2))}.into()),
-            ]
-        }.into()
+        prg,
+        Expr::FnCall(
+            FnCallNode {
+                callee: Expr::Term(
+                    TermNode {
+                        name: Name::from_str("foo")?
+                    }
+                    .into()
+                ),
+                args: vec![
+                    Expr::Literal(
+                        LiteralNode {
+                            value: DataType::Atomic(AtomicType::Int64(1))
+                        }
+                        .into()
+                    ),
+                    Expr::Literal(
+                        LiteralNode {
+                            value: DataType::Atomic(AtomicType::Int64(2))
+                        }
+                        .into()
+                    ),
+                ]
+            }
+            .into()
+        )
+    );
+    Ok(())
+}
+#[test]
+fn test_nested_fncall() -> anyhow::Result<()> {
+    use std::str::FromStr;
+    let prg = expression(&mut lex("foo(bar(1), baz(2))"))?;
+    assert_eq!(
+        prg,
+        Expr::FnCall(
+            FnCallNode {
+                callee: Expr::Term(
+                    TermNode {
+                        name: Name::from_str("foo")?
+                    }
+                    .into()
+                ),
+                args: vec![
+                    Expr::FnCall(
+                        FnCallNode {
+                            callee: Expr::Term(
+                                TermNode {
+                                    name: Name::from_str("bar")?
+                                }
+                                .into()
+                            ),
+                            args: vec![Expr::Literal(
+                                LiteralNode {
+                                    value: DataType::Atomic(AtomicType::Int64(1))
+                                }
+                                .into()
+                            )]
+                        }
+                        .into()
+                    ),
+                    Expr::FnCall(
+                        FnCallNode {
+                            callee: Expr::Term(
+                                TermNode {
+                                    name: Name::from_str("baz")?
+                                }
+                                .into()
+                            ),
+                            args: vec![Expr::Literal(
+                                LiteralNode {
+                                    value: DataType::Atomic(AtomicType::Int64(2))
+                                }
+                                .into()
+                            )]
+                        }
+                        .into()
+                    )
+                ]
+            }
+            .into()
         )
     );
     Ok(())
