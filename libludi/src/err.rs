@@ -8,7 +8,7 @@ use anyhow;
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum LangError {
-    ScanErr(String),
+    LexErr(String),
     ParseErr(String),
     CompileErr(String),
     RuntimeErr(String)
@@ -17,7 +17,7 @@ pub enum LangError {
 impl std::fmt::Display for LangError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ScanErr(msg) => write!(f, "Syntax Error: {}", msg),
+            Self::LexErr(msg) => write!(f, "Lexical Error: {}", msg),
             Self::ParseErr(msg) => write!(f, "Parsing Error: {}", msg),
             Self::CompileErr(msg) => write!(f, "Compile Error: {}",  msg),
             Self::RuntimeErr(msg) => write!(f, "Runtime Error: {}", msg),
@@ -41,6 +41,12 @@ macro_rules! err_at_tok {
 macro_rules! runtime_err {
     ($message:expr) => {
         Err(LangError::RuntimeErr($message.to_string()))
+    };
+}
+#[macro_export]
+macro_rules! lex_err {
+    ($message:expr) => {
+        Err(LangError::LexErr($message.to_string()))
     };
 }
 #[macro_export]

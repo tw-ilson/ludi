@@ -1,8 +1,9 @@
+use std::str::FromStr;
+
 use crate::{
-    array::{Array, ArrayType, ShapeVec},
+    array::{Array, Shape, ShapeVec},
     ast::*,
-    atomic::AtomicType,
-    data::DataType,
+    data::{ArrayType, AtomicType, DataType, DataTypeTag, OptionalTypeSignature},
     env::Name,
     err::{err_at_tok, LangError, Result},
     lex::{lex, Lexer},
@@ -15,11 +16,12 @@ use itertools::Itertools;
 use Token::*;
 
 pub trait Parser {
-    fn parse(&mut self) -> Result<Vec<Expr>>;
+    fn parse(&mut self) -> Result<Expr>;
 }
 impl<'a> Parser for Lexer<'a> {
-    fn parse(&mut self) -> Result<Vec<Expr>> {
-        Ok((0..).map_while(|_| expression(self).ok()).collect())
+    fn parse(&mut self) -> Result<Expr> {
+        // (0..).map_while(|_| expression(self)).collect()
+        expression(self)
     }
 }
 
@@ -126,6 +128,37 @@ fn value(tokens: &mut Lexer) -> Result<Expr> {
     fndef(tokens)
 }
 
+fn fndef(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, FN).is_some() {
+        expect_next!(tokens, OPEN_PAREN)?;
+        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
+            .map_while(|_| {
+                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
+                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
+                        Ok((name.try_into()?, typesignature(tokens)?))
+                    })())
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
+        expect_next!(tokens, ARROW)?;
+        let ret = typesignature(tokens)?;
+        expect_next!(tokens, CLOSE_PAREN)?;
+        expect_next!(tokens, COLON)?;
+        let body = expression(tokens)?;
+        Ok(Expr::FnDef(
+            FnDefNode {
+                signature: CallSignature { args, ret },
+                body,
+            }
+            .into(),
+        ))
+    } else {
+        equality(tokens) // NOTE: is this correct?
+    }
+}
+
 fn equality(tokens: &mut Lexer) -> Result<Expr> {
     match comparison(tokens) {
         Ok(mut expr) => {
@@ -220,91 +253,18 @@ fn factor(tokens: &mut Lexer) -> Result<Expr> {
         Err(e) => Err(e),
     }
 }
-fn shapedef(tokens: &mut Lexer) -> Result<ShapeVec> {
-    if match_next!(tokens, OPEN_BRACKET).is_some() {
-        let shape = (0..)
-            .map_while(|_| match match_next!(tokens, INTEGER_LITERAL(_)) {
-                Some(TokenData {
-                    token: INTEGER_LITERAL(n_str),
-                    ..
-                }) => Some(
-                    n_str
-                        .parse::<usize>()
-                        .or(parse_err!("shape expects an unsigned int")),
-                ),
-                _ => None,
-            })
-            .collect();
-        expect_next!(tokens, CLOSE_BRACKET)?;
-        shape
-    } else {
-        Ok(smallvec::smallvec![])
-    }
-}
 
-//syntax sugar for fn def
-fn fndef(tokens: &mut Lexer) -> Result<Expr> {
-    if match_next!(tokens, FN).is_some() {
-        expect_next!(tokens, OPEN_PAREN)?;
-        let args: Vec<(Name, ShapeVec)> = (0..)
-            .map_while(|_| {
-                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-                    Some((|| -> Result<(Name, ShapeVec)> {
-                        Ok((name.try_into()?, shapedef(tokens)?))
-                    })())
-                } else {
-                    None
-                }
-            })
-            .collect::<Result<Vec<(Name, ShapeVec)>>>()?;
-        let ret = if match_next!(tokens, ARROW).is_some() {
-            Some(shapedef(tokens)?)
-        } else {
-            None
-        };
-        expect_next!(tokens, CLOSE_PAREN)?;
-        expect_next!(tokens, COLON)?;
-        let body = expression(tokens)?;
-        Ok(Expr::FnDef(
-            FnDefNode {
-                signature: CallSignature { args, ret },
-                body,
+fn unary(tokens: &mut Lexer) -> Result<Expr> {
+    if let Some(operator) = match_next!(tokens, BANG | MINUS) {
+        Ok(Expr::UnaryOperation(
+            UnaryOperationNode {
+                operator: operator.token.try_into()?,
+                right: unary(tokens)?,
             }
             .into(),
         ))
     } else {
-        equality(tokens) // NOTE: is this correct?
-    }
-}
-fn closure(tokens: &mut Lexer) -> Result<Expr> {
-    if match_next!(tokens, VBAR).is_some() {
-        let args: Vec<(Name, ShapeVec)> = (0..)
-            .map_while(|_| {
-                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-                    Some((|| -> Result<(Name, ShapeVec)> {
-                        Ok((name.try_into()?, shapedef(tokens)?))
-                    })())
-                } else {
-                    None
-                }
-            })
-            .collect::<Result<Vec<(Name, ShapeVec)>>>()?;
-        let ret = if match_next!(tokens, ARROW).is_some() {
-            Some(shapedef(tokens)?)
-        } else {
-            None
-        };
-        expect_next!(tokens, VBAR)?;
-        let body = expression(tokens)?;
-        Ok(Expr::FnDef(
-            FnDefNode {
-                signature: CallSignature { args, ret },
-                body,
-            }
-            .into(),
-        ))
-    } else {
-        expression(tokens) // NOTE: is this correct?
+        fncall(tokens)
     }
 }
 
@@ -325,75 +285,65 @@ fn fncall(tokens: &mut Lexer) -> Result<Expr> {
     }
 }
 
-fn unary(tokens: &mut Lexer) -> Result<Expr> {
-    if let Some(operator) = match_next!(tokens, BANG | MINUS) {
-        Ok(Expr::UnaryOperation(
-            UnaryOperationNode {
-                operator: operator.token.try_into()?,
-                right: unary(tokens)?,
-            }
-            .into(),
-        ))
-    } else {
-        fncall(tokens)
-    }
-}
-fn array_frame(tokens: &mut Lexer) -> Result<Expr> {
+fn typesignature(tokens: &mut Lexer) -> Result<OptionalTypeSignature> {
     if match_next!(tokens, OPEN_BRACKET).is_some() {
-        Ok(Expr::Frame(
-            FrameNode {
-                expression_list: (0..)
-                    .map_while(|_| {
-                        if match_next!(tokens, CLOSE_BRACKET).is_some() {
-                            None
-                        } else {
-                            Some(expression(tokens))
-                        }
-                    })
-                    .collect::<Result<Vec<Expr>>>()?,
-            }
-            .into(),
-        ))
+        let t_decl: Option<DataTypeTag> = if let Some(TokenData {
+            token: IDENTIFIER(t_id),
+            ..
+        }) = match_next!(tokens, IDENTIFIER(_))
+        {
+            Some(DataTypeTag::from_str(&t_id)?)
+        } else {
+            None
+        };
+        let shape = Shape::from(
+            (0..)
+                .map_while(|_| match match_next!(tokens, INTEGER_LITERAL(_)) {
+                    Some(TokenData {
+                        token: INTEGER_LITERAL(n_str),
+                        ..
+                    }) => Some(
+                        n_str
+                            .parse::<usize>()
+                            .or(parse_err!("shape expects an unsigned int")),
+                    ),
+                    _ => None,
+                })
+                .collect::<Result<ShapeVec>>()?,
+        );
+        expect_next!(tokens, CLOSE_BRACKET)?;
+        Ok(OptionalTypeSignature(t_decl, shape))
     } else {
-        sequence(tokens)
+        Ok(OptionalTypeSignature(None, Shape::new(&[])))
     }
-}
-fn atomic_sequence(tokens: &mut Lexer) -> Result<Vec<AtomicType>> {
-    Ok((0..)
-        .map_while(|i| {
-            if i == 0 {
-                Some(
-                    match_next!(tokens, INTEGER_LITERAL(_) | FLOAT_LITERAL(_) | TRUE | FALSE)
-                        .ok_or(parse_failure!(tokens, "expected literal expression")),
-                )
-            } else if match_next!(tokens, COMMA | UNDERSCORE).is_some() {
-                Some(
-                    match_next!(tokens, INTEGER_LITERAL(_) | FLOAT_LITERAL(_) | TRUE | FALSE)
-                        .ok_or(parse_failure!(tokens, "expected literal expression")),
-                )
-            } else {
-                None
-            }
-        })
-        .process_results(|iter| iter.map(|t| t.into()).collect()))?
 }
 
-fn sequence(tokens: &mut Lexer) -> Result<Expr> {
-    let seq = atomic_sequence(tokens)?;
-    if seq.len() > 1 {
-        Ok(Expr::Literal(
-            LiteralNode {
-                value: DataType::Array(ArrayType::parse_seq(seq)?),
+fn closure(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, VBAR).is_some() {
+        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
+            .map_while(|_| {
+                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
+                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
+                        Ok((name.try_into()?, typesignature(tokens)?))
+                    })())
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
+        expect_next!(tokens, VBAR)?;
+        expect_next!(tokens, ARROW)?;
+        let ret = typesignature(tokens)?;
+        let body = expression(tokens)?;
+        Ok(Expr::FnDef(
+            FnDefNode {
+                signature: CallSignature { args, ret },
+                body,
             }
             .into(),
         ))
     } else {
-        Ok(Expr::Literal(
-            LiteralNode {
-                value: DataType::Atomic(seq[0]),
-            }
-            .into(),
-        ))
+        expression(tokens) // NOTE: is this correct?
     }
 }
 fn primary(tokens: &mut Lexer) -> Result<Expr> {
@@ -425,6 +375,66 @@ fn primary(tokens: &mut Lexer) -> Result<Expr> {
     } else {
         array_frame(tokens)
     }
+}
+
+fn array_frame(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, OPEN_BRACKET).is_some() {
+        Ok(Expr::Frame(
+            FrameNode {
+                expression_list: (0..)
+                    .map_while(|_| {
+                        if match_next!(tokens, CLOSE_BRACKET).is_some() {
+                            None
+                        } else {
+                            Some(expression(tokens))
+                        }
+                    })
+                    .collect::<Result<Vec<Expr>>>()?,
+            }
+            .into(),
+        ))
+    } else {
+        sequence(tokens)
+    }
+}
+
+fn sequence(tokens: &mut Lexer) -> Result<Expr> {
+    let seq = atomic_sequence(tokens)?;
+    if seq.len() > 1 {
+        Ok(Expr::Literal(
+            LiteralNode {
+                value: DataType::Array(ArrayType::parse_seq(seq)?),
+            }
+            .into(),
+        ))
+    } else {
+        Ok(Expr::Literal(
+            LiteralNode {
+                value: DataType::Atomic(seq[0].clone()),
+            }
+            .into(),
+        ))
+    }
+}
+
+fn atomic_sequence(tokens: &mut Lexer) -> Result<Vec<AtomicType>> {
+    Ok((0..)
+        .map_while(|i| {
+            if i == 0 {
+                Some(
+                    match_next!(tokens, INTEGER_LITERAL(_) | FLOAT_LITERAL(_) | TRUE | FALSE)
+                        .ok_or(parse_failure!(tokens, "expected literal expression")),
+                )
+            } else if match_next!(tokens, COMMA | UNDERSCORE).is_some() {
+                Some(
+                    match_next!(tokens, INTEGER_LITERAL(_) | FLOAT_LITERAL(_) | TRUE | FALSE)
+                        .ok_or(parse_failure!(tokens, "expected literal expression")),
+                )
+            } else {
+                None
+            }
+        })
+        .process_results(|iter| iter.map(|t| t.into()).collect()))?
 }
 
 // HELPERS

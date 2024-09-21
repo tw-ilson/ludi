@@ -1,20 +1,25 @@
 use crate::ast::ParseTree;
 use crate::lex::TokenStream;
+use crate::err::{LangError, Result};
 
-trait Conversion<Source, Target> {
-    fn apply_conversion(source: Source) -> Target;
+trait Conversion<Target> : TryInto<Target, Error = LangError> {
+    fn apply_conversion(self) -> Result<Target> {
+        self.try_into()
+    }
 }
 
-macro_rules! define_pipeline {
-    ($($source:ident -> $target:ident),*) => {
-        $(
-            trait ${concat($source,To,$target)} : Conversion<$source, $target> {}
-        )*
-    };
-}
-
-define_pipeline! {
-    String -> TokenStream,
-    TokenStream -> ParseTree
-    ParseTree -> NormalizedAST
-}
+// macro_rules! define_pipeline {
+//     ($($source:ident -> $target:ident),*) => {
+//         $(
+//             paste::paste! {
+//                 trait [< $source To $target>] : Conversion<$source, $target> {}
+//             }
+//         )*
+//     };
+// }
+//
+// define_pipeline! {
+//     String -> TokenStream,
+//     TokenStream -> ParseTree,
+//     ParseTree -> NormalizedAST,
+// }

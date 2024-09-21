@@ -6,18 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ambassador = "0.3.6"
-anyhow = "1.0.86"
-derive_more = "0.99.17"
-half = "2.4.1"
-itertools = "0.13.0"
-num = "0.4.3"
-smallvec = "1.13.2"
-thiserror = "1.0.61"
-unicode-segmentation = "1.11.0"
-melior = { version = "0.18.5", features = ["ods-dialects"], path="../../cloned/melior/melior" }
-paste = "1.0.15"
+ambassador = "0.4.1" # Delegate proc_macro
+anyhow = "1.0.86" # nicer std::Error
+derive_more = "0.99.17" # Derive for fmt::Display
+half = "2.4.1" # half-precision floats
+itertools = "0.13.0" # helpful iterators
+num = "0.4.3" # Complex numbers & big integers
+smallvec = "1.13.2" # stack-allocated Vec
+thiserror = "1.0.61" # more nice std::Error
+unicode-segmentation = "1.11.0" # unicode character for lexer
+melior = { version = "0.18.5", features = ["ods-dialects"], path="../../melior/melior" } # MLIR
+paste = "1.0.15" # identifier concat in macros
 
 [dev-dependencies]
-pretty_assertions = "1.4.0"
+pretty_assertions = "1.4.0" # pretty-prints assertion failures
 

@@ -17,8 +17,9 @@ pub mod env;
 pub mod ops;
 pub mod normalize;
 
+pub mod typecheck;
 
 pub mod r#fn;
+pub mod pipeline;
 // pub mod codegen;
-pub mod dialect;
-// pub mod pipeline;
+// pub mod dialect;

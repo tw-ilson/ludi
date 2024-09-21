@@ -1,7 +1,10 @@
+use std::fmt::Display;
+use std::fs::write;
+use std::ops::Deref;
+
 use crate::tokens::TokenData;
 use crate::env::Name;
-use crate::data::DataType;
-use crate::atomic::AtomicType;
+use crate::data::{ArrayType, AtomicType, DataType, OptionalTypeSignature, TypeSignature};
 use crate::array::ShapeVec;
 use derive_more::Display;
 
@@ -96,6 +99,7 @@ pub(crate) use define_ast;
 pub(crate) use define_enum;
 pub(crate) use define_nodes;
 pub(crate) use define_constructors;
+use itertools::Itertools;
 
 #[derive(Debug, PartialEq)]
 struct AnnotatedNode<Props, Node>{
@@ -151,12 +155,28 @@ pub enum UnaryOpType {
 
 #[derive(Debug, Eq, Clone)]
 pub struct CallSignature {
-    pub args: Vec<(Name, ShapeVec)>,
-    pub ret: Option<ShapeVec>,
+    pub args: Vec<(Name, OptionalTypeSignature)>,
+    pub ret: OptionalTypeSignature,
 }
+
+pub struct TypedCallSignature {
+    pub args: Vec<(Name, TypeSignature)>,
+    pub ret: TypeSignature,
+}
+
+impl Display for CallSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (_, t_arg) in &self.args {
+            write!(f, "{}, ", t_arg)?
+        }
+        write!(f, "-> {}", self.ret)?;
+        Ok(())
+    }
+}
+
 impl PartialEq for CallSignature {
     fn eq(&self, other: &Self) -> bool {
-        self.args.clone().into_iter().zip(other.args.clone()).all(|((_, s1), (_, s2))| s1 == s2)
+        self.args.clone().into_iter().zip(other.args.clone()).all(|((_, t1), (_, t2))| t1 == t2)
             && self.ret == other.ret
     }
 }

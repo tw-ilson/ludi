@@ -1,4 +1,4 @@
-use crate::data::{Data, DataType};
+use crate::data::{Data, DataType, DataTypeTag};
 use crate::err::{parse_err, err_at_tok, LangError, Result};
 use crate::tokens::Token;
 use crate::tokens::{Token::IDENTIFIER, TokenData};
@@ -18,6 +18,7 @@ pub struct Name {
 pub type EnvRef = Rc<Env>;
 type Symbol = OnceCell< DataType>;
 type EnvMap = RefCell<HashMap<Name, Symbol>>;
+type TypedEnvMap = RefCell<HashMap<Name, (DataTypeTag, Option<Symbol>)>>;
 
 pub struct Env
 {

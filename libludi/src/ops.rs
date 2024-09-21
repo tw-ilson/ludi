@@ -5,9 +5,9 @@
  * eventually be replaced by codegen in some form.
  */
 
-use crate::array::{Array, ArrayType, ArrayProps};
-use crate::atomic::{AtomicType};
-use crate::data::{Data, DataType};
+use crate::array::{Array, ArrayProps};
+// use crate::atomic::{AtomicType};
+use crate::data::{Data, DataType, AtomicType, ArrayType};
 use crate::err::{LangError, Result};
 use itertools::izip;
 use num::complex::ComplexFloat;
@@ -187,7 +187,7 @@ macro_rules! delegate_binops_std_array {
                     return Err(LangError::RuntimeErr("shape error".to_owned()))
                 }
                 Ok(Array::new(
-                    self.shape().into(),
+                    self.shape_slice(),
                     &izip!(self.data(), rhs.data())
                         .map_while(|(a, b)| a.$fname(*b).ok())
                         .collect::<Vec<T>>(),
@@ -231,7 +231,7 @@ where
 {
     fn neg(self) -> Result<Self> {
         Ok(Array::new(
-            self.shape(),
+            self.shape_slice(),
             &self
                 .data()
                 .iter()

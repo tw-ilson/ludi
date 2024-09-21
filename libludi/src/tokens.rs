@@ -60,7 +60,7 @@ pub enum Token {
     INTEGER_LITERAL(String),
     FLOAT_LITERAL(String),
 
-    EOF,
+    EOF, // for throwing errors
 }
 
 pub fn same_variant(lhs: &Token, rhs: &Token) -> bool {

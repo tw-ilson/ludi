@@ -1,7 +1,5 @@
-use libludi::array::ArrayType;
 use libludi::array::*;
-use libludi::atomic::AtomicType;
-use libludi::data::{Data, DataType};
+use libludi::data::{Data, DataType, AtomicType, ArrayType};
 use libludi::err::Result;
 use libludi::ops::*;
 
@@ -41,6 +39,6 @@ fn test_frame() {
     b.reshape(&[10,10]);
 
     let c = Result::<ArrayType>::from_iter(vec![a, b]).unwrap();
-    assert_eq!(&[2,10,10], c.shape());
+    assert_eq!(&[2,10,10], c.shape_slice());
     println!("{}", c);
 }

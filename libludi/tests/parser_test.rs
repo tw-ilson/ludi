@@ -1,6 +1,5 @@
 use libludi::ast::*;
-use libludi::atomic::AtomicType;
-use libludi::data::DataType;
+use libludi::data::{DataType, AtomicType, OptionalTypeSignature};
 use libludi::env::Name;
 use libludi::lex::lex;
 use libludi::parser::*;
@@ -73,9 +72,9 @@ fn scan_string_literal() {
 
 #[test]
 fn parse_let() -> anyhow::Result<()> {
-    let expr = lex("let a = 10").parse()?;
+    let expr = expression(&mut lex("let a = 10;"))?;
     assert_eq!(
-        expr[0],
+        expr,
         let_node(
             Name::from_str("a")?,
             literal_node(DataType::Atomic(AtomicType::Int64(10))),
@@ -87,9 +86,9 @@ fn parse_let() -> anyhow::Result<()> {
 
 #[test]
 fn parse_let_with_body() -> anyhow::Result<()> {
-    let expr = lex("let a = 2 in a+2").parse()?;
+    let expr = expression(&mut lex("let a = 2 in a+2"))?;
     assert_eq!(
-        expr[0],
+        expr,
         Expr::Let(
             LetNode {
                 name: libludi::env::Name {
@@ -131,9 +130,9 @@ fn parse_let_with_body() -> anyhow::Result<()> {
 }
 #[test]
 fn let_with_body_complex() -> anyhow::Result<()> {
-    let expr = lex("let a = 2 in let b = 4 in let c = a + b in foo(a, b, c)").parse()?;
+    let expr = expression(&mut lex("let a = 2 in let b = 4 in let c = a + b in foo(a, b, c)"))?;
     assert_eq!(
-        expr[0],
+        expr,
         Expr::Let(
             LetNode {
                 name: libludi::env::Name {
@@ -312,7 +311,7 @@ fn scan_stmts() {
 fn binary_expr2() -> anyhow::Result<()> {
     use Expr::*;
     use Token::*;
-    let s = lex("75.4 + 1.006").parse()?;
+    let s = expression(&mut lex("75.4 + 1.006"))?;
 
     let s_test = BinaryOperation(
         BinaryOperationNode {
@@ -338,7 +337,7 @@ fn binary_expr2() -> anyhow::Result<()> {
         }
         .into(),
     );
-    assert_eq!(s[0], s_test);
+    assert_eq!(s, s_test);
     Ok(())
 }
 #[test]
@@ -403,10 +402,16 @@ fn test_fndef() -> anyhow::Result<()> {
             FnDefNode {
                 signature: CallSignature {
                     args: vec![
-                        (Name::from_str("a")?, smallvec::smallvec![3]),
-                        (Name::from_str("b")?, smallvec::smallvec![3]),
+                        (
+                            Name::from_str("a")?,
+                            OptionalTypeSignature(None, smallvec::smallvec![3].into())
+                        ),
+                        (
+                            Name::from_str("b")?,
+                            OptionalTypeSignature(None, smallvec::smallvec![3].into())
+                        ),
                     ],
-                    ret: Some(smallvec::smallvec![3]),
+                    ret: OptionalTypeSignature(None, smallvec::smallvec![3].into()),
                 },
                 body: Expr::BinaryOperation(
                     BinaryOperationNode {
@@ -442,10 +447,16 @@ fn test_fndef_complex_body() -> anyhow::Result<()> {
             FnDefNode {
                 signature: CallSignature {
                     args: vec![
-                        (Name::from_str("x")?, smallvec::smallvec![5]),
-                        (Name::from_str("y")?, smallvec::smallvec![5]),
+                        (
+                            Name::from_str("x")?,
+                            OptionalTypeSignature(None, smallvec::smallvec![5].into())
+                        ),
+                        (
+                            Name::from_str("y")?,
+                            OptionalTypeSignature(None, smallvec::smallvec![5].into())
+                        ),
                     ],
-                    ret: Some(smallvec::smallvec![5]),
+                    ret: OptionalTypeSignature(None, smallvec::smallvec![5].into()),
                 },
                 body: Expr::BinaryOperation(
                     BinaryOperationNode {
