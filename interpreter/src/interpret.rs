@@ -1,9 +1,8 @@
 use itertools::Itertools;
 use libludi::{
-    array::{Array, ArrayType},
+    array::Array,
     ast::*,
-    atomic::AtomicType,
-    data::{Data, DataType},
+    data::{ArrayType, AtomicType, Data, DataType},
     env::{Env, EnvRef},
     err::{LangError, Result},
     ops::*,
@@ -28,13 +27,12 @@ impl Interpret for Stmt {
                 let r = node.expression.interpret(e)?;
                 println!("    {}", r);
                 Ok(r)
-            }
-            // Stmt::AssignStmt(node) => {
-            //     // &node.name.name
-            //     let val = node.initializer.interpret(e.clone())?;
-            //     e.put(node.name, val.clone());
-            //     Ok(val)
-            // }
+            } // Stmt::AssignStmt(node) => {
+              //     // &node.name.name
+              //     let val = node.initializer.interpret(e.clone())?;
+              //     e.put(node.name, val.clone());
+              //     Ok(val)
+              // }
         }
     }
 }
@@ -52,7 +50,7 @@ impl Interpret for Expr {
             Expr::FnDef(node) => node.interpret(e),
             Expr::Let(_) => todo!(),
             Expr::AtomicCast(_) => todo!(),
-            Expr::ShapeCast(_) => todo!()
+            Expr::ShapeCast(_) => todo!(),
         }
     }
 }

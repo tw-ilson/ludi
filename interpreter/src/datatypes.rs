@@ -23,12 +23,7 @@ pub trait Data // BinaryOp +
 {
 }
 
-#[derive(
-    derive_more::Display,
-    Debug,
-    PartialEq,
-    Clone,
-)]
+#[derive(derive_more::Display, Debug, PartialEq, Clone)]
 pub enum DataType {
     Array(ArrayType),
     Atomic(AtomicType),
@@ -37,19 +32,8 @@ impl Data for DataType {}
 
 pub struct BoxType(Box<DataType>);
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct TypeSignature(pub DataTypeTag, pub Shape);
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct OptionalTypeSignature(pub Option<DataTypeTag>, pub Shape);
-
 #[repr(C, u8)]
-#[derive(
-    derive_more::Display,
-    Debug,
-    Clone,
-    PartialEq,
-)]
+#[derive(derive_more::Display, Debug, Clone, PartialEq)]
 pub enum AtomicType {
     // Numberic
     UInt8(u8) = 0,
@@ -78,13 +62,7 @@ pub enum AtomicType {
 }
 
 #[repr(C, u8)]
-#[derive(
-    derive_more::Display,
-    ambassador::Delegate,
-    Debug,
-    Clone,
-    PartialEq,
-)]
+#[derive(derive_more::Display, ambassador::Delegate, Debug, Clone, PartialEq)]
 #[delegate(ArrayProps)]
 #[delegate(ShapeOps)]
 pub enum ArrayType {
@@ -171,67 +149,9 @@ impl FromIterator<DataType> for Result<DataType> {
     }
 }
 
-impl DataTypeTag {
-    fn into_mlir(self, context: &'static melior::Context) -> melior::ir::Type<'static> {
-        use melior::ir::r#type::{IntegerType, Type};
-        match self {
-            Self::UInt8 => IntegerType::unsigned(context, 8).into(),
-            Self::Int8 => IntegerType::signed(context, 8).into(),
-            Self::UInt16 => IntegerType::unsigned(context, 16).into(),
-            Self::Int16 => IntegerType::signed(context, 16).into(),
-            Self::UInt32 => IntegerType::unsigned(context, 32).into(),
-            Self::Int32 => IntegerType::signed(context, 32).into(),
-            Self::UInt64 => IntegerType::unsigned(context, 64).into(),
-            Self::Int64 => IntegerType::signed(context, 64).into(),
-            Self::BFloat16 => Type::bfloat16(context),
-            Self::Float16 => Type::float16(context),
-            Self::Float32 => Type::float32(context),
-            Self::Float64 => Type::float64(context),
-            Self::Complex => todo!(),
-            Self::Character => todo!(),
-            Self::Boolean => todo!(),
-            Self::Box => todo!(),
-            Self::Fn => todo!(),
-            Self::Unit => todo!(),
-        }
-    }
-}
-
-impl std::fmt::Display for TypeSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}{}]",
-            self.0,
-            self.1
-                .shape_slice()
-                .iter()
-                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
-        )
-    }
-}
-
 impl std::fmt::Display for BoxType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<{}>", std::any::type_name_of_val(&self.0))
-    }
-}
-
-impl std::fmt::Display for OptionalTypeSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}{}]",
-            if let Some(d) = self.0 {
-                d.to_string()
-            } else {
-                "".to_string()
-            },
-            self.1
-                .shape_slice()
-                .iter()
-                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
-        )
     }
 }
 
@@ -262,6 +182,12 @@ impl FromStr for DataTypeTag {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct TypeSignature(pub DataTypeTag, pub Shape);
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct OptionalTypeSignature(pub Option<DataTypeTag>, pub Shape);
+
 impl TryFrom<OptionalTypeSignature> for TypeSignature {
     type Error = LangError;
     fn try_from(value: OptionalTypeSignature) -> Result<Self> {
@@ -271,5 +197,127 @@ impl TryFrom<OptionalTypeSignature> for TypeSignature {
                 .unwrap_or(compile_err!("expected explicit type annotations")?),
             value.1,
         ))
+    }
+}
+
+impl std::fmt::Display for TypeSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}{}]",
+            self.0,
+            self.1
+                .shape_slice()
+                .iter()
+                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
+        )
+    }
+}
+
+impl std::fmt::Display for OptionalTypeSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}{}]",
+            if let Some(d) = self.0 {
+                d.to_string()
+            } else {
+                "".to_string()
+            },
+            self.1
+                .shape_slice()
+                .iter()
+                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
+        )
+    }
+}
+
+impl ArrayType {
+    fn signature(&self) -> TypeSignature {
+        use DataTypeTag::*;
+        match self {
+            Self::UInt8(_) => TypeSignature(UInt8, self.shape()),
+            Self::Int8(_) => TypeSignature(Int8, self.shape()),
+            Self::UInt16(_) => TypeSignature(UInt16, self.shape()),
+            Self::Int16(_) => TypeSignature(Int16, self.shape()),
+            Self::UInt32(_) => TypeSignature(UInt32, self.shape()),
+            Self::Int32(_) => TypeSignature(Int32, self.shape()),
+            Self::Int64(_) => TypeSignature(Int64, self.shape()),
+            Self::UInt64(_) => TypeSignature(UInt64, self.shape()),
+            Self::BFloat16(_) => TypeSignature(BFloat16, self.shape()),
+            Self::Float16(_) => TypeSignature(Float16, self.shape()),
+            Self::Float32(_) => TypeSignature(Float32, self.shape()),
+            Self::Float64(_) => TypeSignature(Float64, self.shape()),
+            Self::Complex(_) => TypeSignature(Complex, self.shape()),
+            Self::Character(_) => TypeSignature(Character, self.shape()),
+            Self::Boolean(_) => TypeSignature(Boolean, self.shape()),
+            Self::Box(_) => todo!(),
+            Self::Fn(_) => todo!(),
+        }
+    }
+}
+
+impl AtomicType {
+    pub fn descriminant(&self) -> u8 {
+        unsafe { *<*const _>::from(self).cast::<u8>() }
+    }
+    pub fn can_upcast_to(&self, other: &Self) -> bool {
+        self.descriminant() < other.descriminant()
+    }
+    pub fn upcast_to(self, descriminant: u8) -> Self {
+        //unimplemented!()
+        self
+    }
+    pub fn upgrade(self) -> ArrayType {
+        match self {
+            Self::UInt8(x) => ArrayType::UInt8(Array::scaler(x)),
+            Self::Int8(x) => ArrayType::Int8(Array::scaler(x)),
+            Self::UInt16(x) => ArrayType::UInt16(Array::scaler(x)),
+            Self::Int16(x) => ArrayType::Int16(Array::scaler(x)),
+            Self::UInt32(x) => ArrayType::UInt32(Array::scaler(x)),
+            Self::Int32(x) => ArrayType::Int32(Array::scaler(x)),
+            Self::UInt64(x) => ArrayType::UInt64(Array::scaler(x)),
+            Self::Int64(x) => ArrayType::Int64(Array::scaler(x)),
+            Self::BFloat16(x) => ArrayType::BFloat16(Array::scaler(x)),
+            Self::Float16(x) => ArrayType::Float16(Array::scaler(x)),
+            Self::Float32(x) => ArrayType::Float32(Array::scaler(x)),
+            Self::Float64(x) => ArrayType::Float64(Array::scaler(x)),
+            Self::Complex(x) => ArrayType::Complex(Array::scaler(x)),
+            Self::Character(c) => ArrayType::Character(Array::scaler(c)),
+            Self::Boolean(b) => ArrayType::Boolean(Array::scaler(b)),
+            Self::Box(a) => ArrayType::Box(Array::scaler(a.into())),
+            Self::Fn(f) => ArrayType::Fn(Array::scaler(f)),
+        }
+    }
+}
+
+impl From<AtomicType> for ArrayType {
+    fn from(value: AtomicType) -> Self {
+        value.upgrade()
+    }
+}
+
+impl From<TokenData> for AtomicType {
+    fn from(value: TokenData) -> Self {
+        use AtomicType::*;
+        use Token::*;
+        match value.token {
+            FLOAT_LITERAL(literal) => Float64(
+                literal
+                    .parse::<f64>()
+                    .expect("uncaught error. expected floating point literal"),
+            ),
+            INTEGER_LITERAL(literal) => Int64(
+                literal
+                    .parse::<i64>()
+                    .expect("uncaught error. expected integer literal"),
+            ),
+            TRUE => Boolean(true),
+            FALSE => Boolean(false),
+            _ => {
+                dbg!(value.token);
+                panic!()
+            }
+        }
     }
 }

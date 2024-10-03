@@ -1,8 +1,8 @@
 use crate::ast::ParseTree;
 use crate::lex::TokenStream;
-use crate::err::{LangError, Result};
+use crate::err::{Error, Result};
 
-trait Conversion<Target> : TryInto<Target, Error = LangError> {
+trait Conversion<Target> : TryInto<Target, Error = Error> {
     fn apply_conversion(self) -> Result<Target> {
         self.try_into()
     }

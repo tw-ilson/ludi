@@ -3,9 +3,11 @@ use std::fs;
 use std::io;
 
 use crate::interpret::Interpret;
+use libludi::ast::Expr;
 use libludi::ast::ParseTree;
 use libludi::env::{Env, EnvRef};
 use libludi::err::{LangError, Result};
+use libludi::parser::expression;
 use libludi::parser::Parser;
 use libludi::lex::lex;
 use rustyline::error::ReadlineError;
@@ -59,15 +61,15 @@ pub fn run(source: &str, e: EnvRef) -> Result<LudiExit> {
             println!("{:?}", t.token);
         })
     };
-    let p: ParseTree = tokens.parse().unwrap();
-    for stmt in p {
+    let p: Expr = expression(&mut tokens).unwrap();
+    // for stmt in p {
         if dump_ast {
-            println!("{:#?}", &stmt);
+            println!("{:#?}", &p);
         }
-        if let Err(e) = stmt.interpret(e.clone()) {
+        if let Err(e) = p.interpret(e.clone()) {
             println!("{}", e);
         }
-    }
+    // }
     Ok(LudiExit::Success)
 }
 

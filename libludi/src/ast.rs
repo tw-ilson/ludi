@@ -2,17 +2,21 @@ use std::fmt::Display;
 use std::fs::write;
 use std::ops::Deref;
 
-use crate::tokens::TokenData;
+use crate::compile_err;
+use crate::atomic::Literal;
+use crate::shape::{Shape, ShapeOps, ArrayProps};
+use crate::types::{Type, PrimitiveFuncType};
 use crate::env::Name;
-use crate::data::{ArrayType, AtomicType, DataType, OptionalTypeSignature, TypeSignature};
-use crate::array::ShapeVec;
+use crate::err::{Error, ErrorKind, Result};
+use crate::token::TokenData;
 use derive_more::Display;
+use itertools::Itertools;
 
 pub type ParseTree = Vec<Expr>;
-pub type NodeRef<T> = Box<T>; 
+pub type NodeRef<T> = Box<T>;
 
 #[macro_export]
-macro_rules! define_ast {
+macro_rules! ast {
     ($(
         $base_name:ident {
          $($variant:ident {
@@ -40,7 +44,6 @@ macro_rules! define_ast {
         )*
     }
 }
-
 #[macro_export]
 macro_rules! define_enum {
     ($base_name:ident {
@@ -73,6 +76,7 @@ macro_rules! define_nodes {
         )+
     };
 }
+
 #[macro_export]
 macro_rules! define_constructors {
     ($base_name:ident {
@@ -84,9 +88,9 @@ macro_rules! define_constructors {
         $(
             paste::paste!{
                 // Gives a shorthand syntax for constructing node
-                pub fn [< $variant:snake:lower _node>]($($childname : $childtype),*) -> $base_name {
+                pub fn [< $variant:snake:lower _node >]($($childname : $childtype),*) -> $base_name {
                     $base_name::$variant(
-                        [<$variant Node>] {
+                        [< $variant Node >] {
                             $($childname,)*
                         }.into()
                     )
@@ -95,73 +99,60 @@ macro_rules! define_constructors {
         )+
     };
 }
-pub(crate) use define_ast;
-pub(crate) use define_enum;
-pub(crate) use define_nodes;
-pub(crate) use define_constructors;
-use itertools::Itertools;
 
-#[derive(Debug, PartialEq)]
-struct AnnotatedNode<Props, Node>{
-    pub props: Props,
-    pub node: Node
-}
 
-struct AnnotatedAST<A> {
-    props: A,
-    ast: ParseTree
-}
 
-macro_rules! annotated_ast {
-    ($(
-        $base_name:ident {
-         $($variant:ident $variant_data:ident {
-             $($childname:ident: $childtype:ty),*
-         })|+
-    })*
-    ) => {
-    $(
-        annotated_nodes!($base_name {
-         $($variant $variant_data {
-             $($childname: $childtype),*
-         }),+});
-     )*
-    };
-}
+pub use define_constructors;
+pub use define_enum;
+pub use define_nodes;
+pub use ast;
 
-macro_rules! annotated_nodes {
-    ($base_name:ident {
-        $($variant:ident $variant_data:ident {
-             $($childname:ident: $childtype:ty),*
-        }),+
-    }) => {
-        $(
-            paste! {
-                pub type [<Annotated $variant_data>]<Props> = AnnotatedNode<Props, $variant_data>;
-            }
-        )+
+// AST productions for the lang of format:
+// Symbol {
+//      production { attributes... }
+//      ...
+//      }
+ast! {
+    Stmt {
+          ExprStmt { expression: Expr }
+        | PrintStmt { expression: Expr }
+    }
+    Expr {
+          FnDef { signature: CallSignature, body:Expr }
+        | FnCall { callee: Callee, args: Vec<Expr> }
+        | Frame { expression_list: Vec<Expr> }
+        | AtomLiteral { value: Literal }
+        | ArrayLiteral { value: Vec<Literal> }
+        | Let { name:Name, initializer: Expr, region: Option<Expr> }
+        | Term { name: Name }
+        // | AtomicCast {value: Expr }
+        // | ShapeCast {value: Expr }
     }
 }
 
-// define primitives
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Display)]
-pub enum BinaryOpType {
-    ADD, SUB, MUL, DIV
+#[derive(Debug, PartialEq)]
+pub enum Callee  {
+    Expression(Expr),
+    Primitive(PrimitiveFuncType),
 }
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Display)]
-pub enum UnaryOpType {
-    NEG, INV
-}
+
+// pub fn binary_operation(op: &'static str, left: Expr, right: Expr) -> Expr {
+//     let args = vec![left, right];
+//     match op {
+//     }
+// }
+
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct TypeSignature(pub Type, pub Shape);
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct OptionalTypeSignature(pub Option<Type>, pub Shape);
 
 #[derive(Debug, Eq, Clone)]
 pub struct CallSignature {
     pub args: Vec<(Name, OptionalTypeSignature)>,
     pub ret: OptionalTypeSignature,
-}
-
-pub struct TypedCallSignature {
-    pub args: Vec<(Name, TypeSignature)>,
-    pub ret: TypeSignature,
 }
 
 impl Display for CallSignature {
@@ -176,34 +167,58 @@ impl Display for CallSignature {
 
 impl PartialEq for CallSignature {
     fn eq(&self, other: &Self) -> bool {
-        self.args.clone().into_iter().zip(other.args.clone()).all(|((_, t1), (_, t2))| t1 == t2)
+        self.args
+            .clone()
+            .into_iter()
+            .zip(other.args.clone())
+            .all(|((_, t1), (_, t2))| t1 == t2)
             && self.ret == other.ret
     }
 }
 
-// AST productions for the lang of format:
-// Symbol { 
-//      production { attributes... } 
-//      ...
-//      } 
-define_ast! {
-    Stmt {
-          ExprStmt { expression: Expr }
-        | PrintStmt { expression: Expr }
-    }
-    Expr {
-          UnaryOperation { operator: UnaryOpType, right: Expr }
-        | BinaryOperation { left: Expr, operator: BinaryOpType, right: Expr }
-        | FnDef { signature: CallSignature, body:Expr }
-        | FnCall { callee: Expr, args: Vec<Expr> }
-        | Grouping { expression: Expr }
-        | Frame { expression_list: Vec<Expr> }
-        | Literal {value: DataType }
-        | Let { name:Name, initializer: Expr, region: Option<Expr> }
-        | Term {name: Name }
-        | AtomicCast {value: DataType }
-        | ShapeCast {value: DataType }
+
+impl TryFrom<OptionalTypeSignature> for TypeSignature {
+    type Error = Error;
+    fn try_from(value: OptionalTypeSignature) -> Result<Self> {
+        Ok(TypeSignature(
+            value
+                .0
+                .ok_or(compile_err!("expected explicit type annotations"))?,
+            value.1,
+        ))
     }
 }
 
+
+impl std::fmt::Display for TypeSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}{}]",
+            self.0,
+            self.1
+                .shape_slice()
+                .iter()
+                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
+        )
+    }
+}
+
+impl std::fmt::Display for OptionalTypeSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}{}]",
+            if let Some(d) = &self.0 {
+                d.to_string()
+            } else {
+                "".to_string()
+            },
+            self.1
+                .shape_slice()
+                .iter()
+                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
+        )
+    }
+}
 

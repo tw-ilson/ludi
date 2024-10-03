@@ -1,3 +1,7 @@
+// In order to take advantages of MLIR's pass infrastructure,
+// we can define our own dialect for
+// Ludi
+
 melior::dialect! {
     name: "ludi",
     table_gen:

@@ -1,19 +1,36 @@
+use libludi::ast::OptionalTypeSignature;
 use libludi::ast::*;
-use libludi::data::{DataType, AtomicType, OptionalTypeSignature};
+use libludi::atomic::Literal;
 use libludi::env::Name;
+use libludi::err::ErrorKind;
+use libludi::err::ParseError;
 use libludi::lex::lex;
 use libludi::parser::*;
-use libludi::tokens::*;
-use pretty_assertions::{assert_eq, assert_ne};
+use libludi::token::*;
+use libludi::types::PrimitiveFuncType;
+use pretty_assertions::assert_eq;
 use std::str::FromStr;
 use std::vec;
+
+fn atom_int(li: &str) -> Expr {
+    atom_literal_node(Literal::Int {
+        loc: Location { line: 1 },
+        atom: String::from(li),
+    })
+}
+fn atom_float(lf: &str) -> Expr {
+    atom_literal_node(Literal::Float {
+        loc: Location { line: 1 },
+        atom: String::from(lf),
+    })
+}
 
 #[test]
 fn scan_arithmetic_tokens() {
     let src = "+ - * /";
     let src2 = "+-*/";
     let s = lex(src);
-    use libludi::tokens::Token::*;
+    use libludi::token::Token::*;
     assert_eq!(
         s.map(|tok| tok.token).collect::<Vec<Token>>(),
         vec![PLUS, MINUS, STAR, SLASH]
@@ -27,22 +44,22 @@ fn scan_arithmetic_tokens() {
 
 #[test]
 fn scan_number_literal() {
-    let src = "12 - 7".to_string();
-    let src2 = "4712.08".to_string();
-    let src3 = "2.0 + 0.3".to_string();
-    use libludi::tokens::Token::*;
+    let src = "12 - 7";
+    let src2 = "4712.08";
+    let src3 = "2.0 + 0.3";
+    use libludi::token::Token::*;
     assert_eq!(
         lex(&src).next().unwrap(),
         TokenData {
             token: INTEGER_LITERAL("12".into()),
-            line: 1
+            loc: Location { line: 1 }
         }
     );
     assert_eq!(
         lex(&src2).next().unwrap(),
         TokenData {
             token: FLOAT_LITERAL("4712.08".into()),
-            line: 1
+            loc: Location { line: 1 }
         }
     );
     assert_eq!(
@@ -58,7 +75,7 @@ fn scan_number_literal() {
 #[test]
 fn scan_string_literal() {
     let src = "\"Hello,\" + \" world!\"";
-    use libludi::tokens::Token::*;
+    use libludi::token::Token::*;
     let toks: Vec<Token> = lex(src).map(|d| d.token).collect::<Vec<Token>>();
     assert_eq!(
         toks.as_slice(),
@@ -77,7 +94,10 @@ fn parse_let() -> anyhow::Result<()> {
         expr,
         let_node(
             Name::from_str("a")?,
-            literal_node(DataType::Atomic(AtomicType::Int64(10))),
+            atom_literal_node(Literal::Int {
+                loc: Location { line: 1 },
+                atom: String::from("10")
+            }),
             None
         )
     );
@@ -93,32 +113,24 @@ fn parse_let_with_body() -> anyhow::Result<()> {
             LetNode {
                 name: libludi::env::Name {
                     name: "a".into(),
-                    line: 1
+                    loc: Location { line: 1 }
                 },
-                initializer: Expr::Literal(
-                    LiteralNode {
-                        value: DataType::Atomic(AtomicType::Int64(2))
-                    }
-                    .into()
-                ),
-                region: Some(Expr::BinaryOperation(
-                    BinaryOperationNode {
-                        left: Expr::Term(
-                            TermNode {
-                                name: libludi::env::Name {
-                                    name: "a".into(),
-                                    line: 1
+                initializer: atom_int("2"),
+                region: Some(Expr::FnCall(
+                    FnCallNode {
+                        callee: Callee::Primitive(PrimitiveFuncType::Add),
+                        args: vec![
+                            Expr::Term(
+                                TermNode {
+                                    name: libludi::env::Name {
+                                        name: "a".into(),
+                                        loc: Location { line: 1 }
+                                    }
                                 }
-                            }
-                            .into()
-                        ),
-                        right: Expr::Literal(
-                            LiteralNode {
-                                value: DataType::Atomic(AtomicType::Int64(2))
-                            }
-                            .into()
-                        ),
-                        operator: BinaryOpType::ADD,
+                                .into()
+                            ),
+                            atom_int("2")
+                        ]
                     }
                     .into()
                 ))
@@ -130,80 +142,40 @@ fn parse_let_with_body() -> anyhow::Result<()> {
 }
 #[test]
 fn let_with_body_complex() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("let a = 2 in let b = 4 in let c = a + b in foo(a, b, c)"))?;
+    let expr = expression(&mut lex(
+        "let a = 2 in let b = 4 in let c = a + b in foo(a, b, c)",
+    ))?;
     assert_eq!(
         expr,
         Expr::Let(
             LetNode {
                 name: libludi::env::Name {
                     name: "a".into(),
-                    line: 1
+                    loc: Location { line: 1 }
                 },
-                initializer: Expr::Literal(
-                    LiteralNode {
-                        value: DataType::Atomic(AtomicType::Int64(2))
-                    }
-                    .into()
-                ),
+                initializer: atom_int("2"),
                 region: Some(Expr::Let(
                     LetNode {
                         name: libludi::env::Name {
                             name: "b".into(),
-                            line: 1
+                            loc: Location { line: 1 }
                         },
-                        initializer: Expr::Literal(
-                            LiteralNode {
-                                value: DataType::Atomic(AtomicType::Int64(4))
-                            }
-                            .into()
-                        ),
+                        initializer: atom_int("4"),
                         region: Some(Expr::Let(
                             LetNode {
                                 name: libludi::env::Name {
                                     name: "c".into(),
-                                    line: 1
+                                    loc: Location { line: 1 }
                                 },
-                                initializer: Expr::BinaryOperation(
-                                    BinaryOperationNode {
-                                        left: Expr::Term(
-                                            TermNode {
-                                                name: libludi::env::Name {
-                                                    name: "a".into(),
-                                                    line: 1
-                                                }
-                                            }
-                                            .into()
-                                        ),
-                                        right: Expr::Term(
-                                            TermNode {
-                                                name: libludi::env::Name {
-                                                    name: "b".into(),
-                                                    line: 1
-                                                }
-                                            }
-                                            .into()
-                                        ),
-                                        operator: BinaryOpType::ADD,
-                                    }
-                                    .into()
-                                ),
-                                region: Some(Expr::FnCall(
+                                initializer: Expr::FnCall(
                                     FnCallNode {
-                                        callee: Expr::Term(
-                                            TermNode {
-                                                name: libludi::env::Name {
-                                                    name: "foo".into(),
-                                                    line: 1
-                                                }
-                                            }
-                                            .into()
-                                        ),
+                                        callee: Callee::Primitive(PrimitiveFuncType::Add),
                                         args: vec![
                                             Expr::Term(
                                                 TermNode {
                                                     name: libludi::env::Name {
                                                         name: "a".into(),
-                                                        line: 1
+                                                        loc: Location { line: 1 }
                                                     }
                                                 }
                                                 .into()
@@ -212,7 +184,41 @@ fn let_with_body_complex() -> anyhow::Result<()> {
                                                 TermNode {
                                                     name: libludi::env::Name {
                                                         name: "b".into(),
-                                                        line: 1
+                                                        loc: Location { line: 1 }
+                                                    }
+                                                }
+                                                .into()
+                                            ),
+                                        ]
+                                    }
+                                    .into()
+                                ),
+                                region: Some(Expr::FnCall(
+                                    FnCallNode {
+                                        callee: Callee::Expression(Expr::Term(
+                                            TermNode {
+                                                name: libludi::env::Name {
+                                                    name: "foo".into(),
+                                                    loc: Location { line: 1 }
+                                                }
+                                            }
+                                            .into()
+                                        )),
+                                        args: vec![
+                                            Expr::Term(
+                                                TermNode {
+                                                    name: libludi::env::Name {
+                                                        name: "a".into(),
+                                                        loc: Location { line: 1 }
+                                                    }
+                                                }
+                                                .into()
+                                            ),
+                                            Expr::Term(
+                                                TermNode {
+                                                    name: libludi::env::Name {
+                                                        name: "b".into(),
+                                                        loc: Location { line: 1 }
                                                     }
                                                 }
                                                 .into()
@@ -221,7 +227,7 @@ fn let_with_body_complex() -> anyhow::Result<()> {
                                                 TermNode {
                                                     name: libludi::env::Name {
                                                         name: "c".into(),
-                                                        line: 1
+                                                        loc: Location { line: 1 }
                                                     }
                                                 }
                                                 .into()
@@ -246,7 +252,7 @@ fn let_with_body_complex() -> anyhow::Result<()> {
 #[test]
 fn scan_stmts() {
     let src = "print 2+2;";
-    use libludi::tokens::Token::*;
+    use libludi::token::Token::*;
     let toks: Vec<Token> = lex(src).map(|d| d.token).collect::<Vec<Token>>();
     assert_eq!(
         toks.as_slice(),
@@ -260,131 +266,89 @@ fn scan_stmts() {
     );
 }
 
-// #[test]
-// fn binary_expr1() {
-//     use Expr::*;
-//     use Token::*;
-//     let mut src = "5<3".;
-//     let s: &Stmt = &src.parse().expect("failed to parse")[0];
-//
-//     let s_test = &Stmt::ExprStmt(
-//         ExprStmtNode {
-//             expression: Binary(
-//                 BinaryOperationNode {
-//                     left: AtomicCast(
-//                         AtomicCastNode {
-//                             value: LiteralNode {
-//                                 value: AtomicData::from(TokenData {
-//                                     token: INTEGER_LITERAL("5".into()),
-//                                     line: 1,
-//                                 }),
-//                             },
-//                         }
-//                         .into(),
-//                     ),
-//                     operator: TokenData {
-//                         token: LESS,
-//                         line: 1,
-//                     },
-//                     right: AtomicCast(
-//                         AtomicCastNode {
-//                             value: LiteralNode {
-//                                 value: AtomicData::from(TokenData {
-//                                     token: INTEGER_LITERAL("3".into()),
-//                                     line: 1,
-//                                 }),
-//                             },
-//                         }
-//                         .into(),
-//                     ),
-//                 }
-//                 .into(),
-//             ),
-//         }
-//         .into(),
-//     );
-//
-//     assert_eq!(s, s_test)
-// }
+#[test]
+fn binary_expr1() -> anyhow::Result<()> {
+    let src = "5<3";
+    let s: Expr = expression(&mut lex(src))?;
+    let s_test = Expr::FnCall(
+        FnCallNode {
+            callee: Callee::Primitive(PrimitiveFuncType::Gt),
+            args: vec![atom_int("5"), atom_int("3")],
+        }
+        .into(),
+    );
+
+    assert_eq!(s, s_test);
+    Ok(())
+}
 
 #[test]
 fn binary_expr2() -> anyhow::Result<()> {
     use Expr::*;
-    use Token::*;
     let s = expression(&mut lex("75.4 + 1.006"))?;
 
-    let s_test = BinaryOperation(
-        BinaryOperationNode {
-            left: Literal(
-                LiteralNode {
-                    value: DataType::Atomic(AtomicType::from(TokenData {
-                        token: FLOAT_LITERAL("75.4".into()),
-                        line: 1,
-                    })),
-                }
-                .into(),
-            ),
-            operator: BinaryOpType::ADD,
-            right: Literal(
-                LiteralNode {
-                    value: DataType::Atomic(AtomicType::from(TokenData {
-                        token: FLOAT_LITERAL("1.006".into()),
-                        line: 1,
-                    })),
-                }
-                .into(),
-            ),
+    let s_test = FnCall(
+        FnCallNode {
+            callee: Callee::Primitive(PrimitiveFuncType::Add),
+            args: vec![atom_float("75.4"), atom_float("1.006")],
         }
         .into(),
     );
     assert_eq!(s, s_test);
     Ok(())
 }
+
 #[test]
 fn test_binary_operation() -> anyhow::Result<()> {
     use std::str::FromStr;
     let prg = expression(&mut lex("a + b * c - d"))?;
     assert_eq!(
         prg,
-        Expr::BinaryOperation(
-            BinaryOperationNode {
-                operator: BinaryOpType::SUB,
-                left: Expr::BinaryOperation(
-                    BinaryOperationNode {
-                        operator: BinaryOpType::ADD,
-                        left: Expr::Term(
-                            TermNode {
-                                name: Name::from_str("a")?
-                            }
-                            .into()
-                        ),
-                        right: Expr::BinaryOperation(
-                            BinaryOperationNode {
-                                operator: BinaryOpType::MUL,
-                                left: Expr::Term(
+        Expr::FnCall(
+            FnCallNode {
+                callee: Callee::Primitive(PrimitiveFuncType::Sub),
+                args: vec![
+                    Expr::FnCall(
+                        FnCallNode {
+                            callee: Callee::Primitive(PrimitiveFuncType::Add),
+                            args: vec![
+                                Expr::Term(
                                     TermNode {
-                                        name: Name::from_str("b")?
+                                        name: Name::from_str("a")?
                                     }
                                     .into()
                                 ),
-                                right: Expr::Term(
-                                    TermNode {
-                                        name: Name::from_str("c")?
+                                Expr::FnCall(
+                                    FnCallNode {
+                                        callee: Callee::Primitive(PrimitiveFuncType::Mul),
+                                        args: vec![
+                                            Expr::Term(
+                                                TermNode {
+                                                    name: Name::from_str("b")?
+                                                }
+                                                .into()
+                                            ),
+                                            Expr::Term(
+                                                TermNode {
+                                                    name: Name::from_str("c")?
+                                                }
+                                                .into()
+                                            )
+                                        ]
                                     }
                                     .into()
                                 )
-                            }
-                            .into()
-                        )
-                    }
-                    .into()
-                ),
-                right: Expr::Term(
-                    TermNode {
-                        name: Name::from_str("d")?
-                    }
-                    .into()
-                )
+                            ]
+                        }
+                        .into()
+                    ),
+                    Expr::Term(
+                        TermNode {
+                            name: Name::from_str("d")?
+                        }
+                        .into()
+                    )
+                ]
             }
             .into()
         )
@@ -413,21 +377,23 @@ fn test_fndef() -> anyhow::Result<()> {
                     ],
                     ret: OptionalTypeSignature(None, smallvec::smallvec![3].into()),
                 },
-                body: Expr::BinaryOperation(
-                    BinaryOperationNode {
-                        operator: BinaryOpType::ADD,
-                        left: Expr::Term(
-                            TermNode {
-                                name: Name::from_str("a")?
-                            }
-                            .into()
-                        ),
-                        right: Expr::Term(
-                            TermNode {
-                                name: Name::from_str("b")?
-                            }
-                            .into()
-                        )
+                body: Expr::FnCall(
+                    FnCallNode {
+                        callee: Callee::Primitive(PrimitiveFuncType::Add),
+                        args: vec![
+                            Expr::Term(
+                                TermNode {
+                                    name: Name::from_str("a")?
+                                }
+                                .into()
+                            ),
+                            Expr::Term(
+                                TermNode {
+                                    name: Name::from_str("b")?
+                                }
+                                .into()
+                            )
+                        ]
                     }
                     .into()
                 )
@@ -458,38 +424,40 @@ fn test_fndef_complex_body() -> anyhow::Result<()> {
                     ],
                     ret: OptionalTypeSignature(None, smallvec::smallvec![5].into()),
                 },
-                body: Expr::BinaryOperation(
-                    BinaryOperationNode {
-                        operator: BinaryOpType::MUL,
-                        left: Expr::Grouping(
-                            GroupingNode {
-                                expression: Expr::BinaryOperation(
-                                    BinaryOperationNode {
-                                        operator: BinaryOpType::ADD,
-                                        left: Expr::Term(
+                body: Expr::FnCall(
+                    FnCallNode {
+                        callee: Callee::Primitive(PrimitiveFuncType::Mul),
+                        args: vec![
+                            Expr::FnCall(
+                                FnCallNode {
+                                    callee: Callee::Primitive(PrimitiveFuncType::Add),
+                                    args: vec![
+                                        Expr::Term(
                                             TermNode {
                                                 name: Name::from_str("x")?
                                             }
                                             .into()
                                         ),
-                                        right: Expr::Term(
+                                        Expr::Term(
                                             TermNode {
                                                 name: Name::from_str("y")?
                                             }
                                             .into()
                                         )
+                                    ]
+                                }
+                                .into()
+                            ),
+                            Expr::AtomLiteral(
+                                AtomLiteralNode {
+                                    value: Literal::Int {
+                                        loc: Location { line: 1 },
+                                        atom: String::from("2")
                                     }
-                                    .into()
-                                )
-                            }
-                            .into()
-                        ),
-                        right: Expr::Literal(
-                            LiteralNode {
-                                value: DataType::Atomic(AtomicType::Int64(2))
-                            }
-                            .into()
-                        )
+                                }
+                                .into()
+                            )
+                        ]
                     }
                     .into()
                 )
@@ -508,22 +476,28 @@ fn test_fncall() -> anyhow::Result<()> {
         prg,
         Expr::FnCall(
             FnCallNode {
-                callee: Expr::Term(
+                callee: Callee::Expression(Expr::Term(
                     TermNode {
                         name: Name::from_str("foo")?
                     }
                     .into()
-                ),
+                )),
                 args: vec![
-                    Expr::Literal(
-                        LiteralNode {
-                            value: DataType::Atomic(AtomicType::Int64(1))
+                    Expr::AtomLiteral(
+                        AtomLiteralNode {
+                            value: Literal::Int {
+                                loc: Location { line: 1 },
+                                atom: String::from("1")
+                            }
                         }
                         .into()
                     ),
-                    Expr::Literal(
-                        LiteralNode {
-                            value: DataType::Atomic(AtomicType::Int64(2))
+                    Expr::AtomLiteral(
+                        AtomLiteralNode {
+                            value: Literal::Int {
+                                loc: Location { line: 1 },
+                                atom: String::from("2")
+                            }
                         }
                         .into()
                     ),
@@ -542,24 +516,27 @@ fn test_nested_fncall() -> anyhow::Result<()> {
         prg,
         Expr::FnCall(
             FnCallNode {
-                callee: Expr::Term(
+                callee: Callee::Expression(Expr::Term(
                     TermNode {
                         name: Name::from_str("foo")?
                     }
                     .into()
-                ),
+                )),
                 args: vec![
                     Expr::FnCall(
                         FnCallNode {
-                            callee: Expr::Term(
+                            callee: Callee::Expression(Expr::Term(
                                 TermNode {
                                     name: Name::from_str("bar")?
                                 }
                                 .into()
-                            ),
-                            args: vec![Expr::Literal(
-                                LiteralNode {
-                                    value: DataType::Atomic(AtomicType::Int64(1))
+                            )),
+                            args: vec![Expr::AtomLiteral(
+                                AtomLiteralNode {
+                                    value: Literal::Int {
+                                        loc: Location { line: 1 },
+                                        atom: String::from("1")
+                                    }
                                 }
                                 .into()
                             )]
@@ -568,15 +545,18 @@ fn test_nested_fncall() -> anyhow::Result<()> {
                     ),
                     Expr::FnCall(
                         FnCallNode {
-                            callee: Expr::Term(
+                            callee: Callee::Expression(Expr::Term(
                                 TermNode {
                                     name: Name::from_str("baz")?
                                 }
                                 .into()
-                            ),
-                            args: vec![Expr::Literal(
-                                LiteralNode {
-                                    value: DataType::Atomic(AtomicType::Int64(2))
+                            )),
+                            args: vec![Expr::AtomLiteral(
+                                AtomLiteralNode {
+                                    value: Literal::Int {
+                                        loc: Location { line: 1 },
+                                        atom: String::from("2")
+                                    }
                                 }
                                 .into()
                             )]
@@ -590,3 +570,67 @@ fn test_nested_fncall() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_parse_array1() -> anyhow::Result<()> {
+    let mut tokens = lex("[ 1 2 3 2 1 ]");
+    let expr = expression(&mut tokens)?;
+
+    assert_eq!(
+        expr,
+        frame_node(vec![
+            atom_int("1"),
+            atom_int("2"),
+            atom_int("3"),
+            atom_int("2"),
+            atom_int("1")
+        ])
+    );
+    Ok(())
+}
+
+#[test]
+fn test_frame1() -> anyhow::Result<()> {
+    let expr = expression(&mut lex("let a = 1; let b = 2; [ a b ]"))?;
+    assert_eq!(
+        expr,
+        let_node(
+            Name::from_str("a")?,
+            atom_int("1"),
+            Some(let_node(
+                Name::from_str("b")?,
+                atom_int("2"),
+                Some(frame_node(vec![
+                    term_node(Name::from_str("a")?),
+                    term_node(Name::from_str("b")?)
+                ]))
+            ))
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn test_frame_illegal() -> anyhow::Result<()> {
+    let expr = expression(&mut lex(
+            "[[7 1 2]
+              [9 5]
+              [2 0 5]]"
+            ));
+    dbg!(expr.unwrap());
+    panic!();
+    // assert!(expr.is_err());
+    Ok(())
+}
+
+// #[test]
+// fn test_parse_array2() -> anyhow::Result<()> {
+//     let mut tokens = lex("1_2_3_2_1");
+//     let expr = expression(&mut tokens)?;
+//
+//     assert_eq!(
+//         expr,
+//         array_literal_node(vec![atom_int("1"), atom_int("2"), atom_int("3"), atom_int("2"), atom_int("1")])
+//     );
+//     Ok(())
+// }

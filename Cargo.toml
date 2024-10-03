@@ -1,7 +1,7 @@
 [workspace]
   members=[
     "libludi",
-    "interpreter",
-    # "shvm" -- need to rethink it
+    # "interpreter", 
+    # "shvm" 
     ]
   resolver="2"

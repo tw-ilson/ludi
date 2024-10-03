@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
 use crate::{
-    array::{Array, Shape, ShapeVec},
     ast::*,
-    data::{ArrayType, AtomicType, DataType, DataTypeTag, OptionalTypeSignature},
+    atomic::Literal,
     env::Name,
-    err::{err_at_tok, LangError, Result},
+    err::{err_at_tok_msg, parse_err, Result},
     lex::{lex, Lexer},
-    parse_err,
-    tokens::{Token, TokenData},
+    shape::{Shape, ShapeVec},
+    token::{Location, Token, TokenData},
+    types::{PrimitiveFuncType, Type},
 };
 
 use anyhow::Context;
@@ -18,7 +18,7 @@ use Token::*;
 pub trait Parser {
     fn parse(&mut self) -> Result<Expr>;
 }
-impl<'a> Parser for Lexer<'a> {
+impl Parser for Lexer {
     fn parse(&mut self) -> Result<Expr> {
         // (0..).map_while(|_| expression(self)).collect()
         expression(self)
@@ -28,14 +28,14 @@ impl<'a> Parser for Lexer<'a> {
 macro_rules! parse_failure {
     ($tokens:ident, $msg:expr) => {
         if let Some(bad_tok) = $tokens.peek() {
-            LangError::ParseErr(err_at_tok!(bad_tok.clone(), $msg.to_string()))
+            parse_err!(err_at_tok_msg!(bad_tok.clone(), $msg))
         } else {
-            LangError::ParseErr(err_at_tok!(
+            parse_err!(err_at_tok_msg!(
                 TokenData {
                     token: EOF,
-                    line: 0,
+                    loc: Location { line: 0 },
                 },
-                "reached end of file unexpectedly!".to_string()
+                "reached end of file unexpectedly!"
             ))
         }
     };
@@ -113,8 +113,12 @@ fn letexpr(tokens: &mut Lexer) -> Result<Expr> {
                 name: name.try_into()?,
                 initializer: value(tokens)?,
                 region: {
-                    expect_next!(tokens, IN | SEMICOLON)?;
-                    Some(expression(tokens)?)
+                    let TokenData { token, loc: _ } = expect_next!(tokens, IN | SEMICOLON)?;
+                    match token {
+                        IN => Some(expression(tokens)?),
+                        SEMICOLON => expression(tokens).ok(),
+                        _ => unreachable!(),
+                    }
                 },
             }
             .into(),
@@ -155,7 +159,7 @@ fn fndef(tokens: &mut Lexer) -> Result<Expr> {
             .into(),
         ))
     } else {
-        equality(tokens) // NOTE: is this correct?
+        equality(tokens)
     }
 }
 
@@ -165,14 +169,18 @@ fn equality(tokens: &mut Lexer) -> Result<Expr> {
             while let Some(operator) = match_next!(tokens, EQUAL_EQUAL | BANG_EQUAL) {
                 match comparison(tokens) {
                     Ok(right) => {
-                        expr = Expr::BinaryOperation(
-                            BinaryOperationNode {
-                                left: expr,
-                                operator: operator.token.try_into()?,
-                                right,
+                        let left = expr;
+                        expr = Expr::FnCall(
+                            FnCallNode {
+                                callee: Callee::Primitive(match operator.token {
+                                    EQUAL_EQUAL => PrimitiveFuncType::Equal,
+                                    BANG_EQUAL => PrimitiveFuncType::Ne,
+                                    _ => unreachable!(),
+                                }),
+                                args: vec![left, right],
                             }
                             .into(),
-                        );
+                        )
                     }
                     Err(e) => return Err(e),
                 }
@@ -190,11 +198,17 @@ fn comparison(tokens: &mut Lexer) -> Result<Expr> {
             {
                 match term(tokens) {
                     Ok(right) => {
-                        expr = Expr::BinaryOperation(
-                            BinaryOperationNode {
-                                left: expr,
-                                operator: operator.token.try_into()?,
-                                right,
+                        let left = expr;
+                        expr = Expr::FnCall(
+                            FnCallNode {
+                                callee: Callee::Primitive(match operator.token {
+                                    GREATER => PrimitiveFuncType::Gt,
+                                    GREATER_EQUAL => PrimitiveFuncType::GtEq,
+                                    LESS => PrimitiveFuncType::Gt,
+                                    LESS_EQUAL => PrimitiveFuncType::LtEq,
+                                    _ => unreachable!(),
+                                }),
+                                args: vec![left, right],
                             }
                             .into(),
                         )
@@ -204,7 +218,7 @@ fn comparison(tokens: &mut Lexer) -> Result<Expr> {
             }
             Ok(expr)
         }
-        Err(e) => Err(e),
+        Err(e) => return Err(e),
     }
 }
 fn term(tokens: &mut Lexer) -> Result<Expr> {
@@ -213,11 +227,15 @@ fn term(tokens: &mut Lexer) -> Result<Expr> {
             while let Some(operator) = match_next!(tokens, PLUS | MINUS) {
                 match factor(tokens) {
                     Ok(right) => {
-                        expr = Expr::BinaryOperation(
-                            BinaryOperationNode {
-                                left: expr,
-                                operator: operator.token.try_into()?,
-                                right,
+                        let left = expr;
+                        expr = Expr::FnCall(
+                            FnCallNode {
+                                callee: Callee::Primitive(match operator.token {
+                                    PLUS => PrimitiveFuncType::Add,
+                                    MINUS => PrimitiveFuncType::Sub,
+                                    _ => unreachable!(),
+                                }),
+                                args: vec![left, right],
                             }
                             .into(),
                         )
@@ -236,11 +254,15 @@ fn factor(tokens: &mut Lexer) -> Result<Expr> {
             while let Some(operator) = match_next!(tokens, STAR | SLASH) {
                 match unary(tokens) {
                     Ok(right) => {
-                        expr = Expr::BinaryOperation(
-                            BinaryOperationNode {
-                                left: expr,
-                                operator: operator.token.try_into()?,
-                                right,
+                        let left = expr;
+                        expr = Expr::FnCall(
+                            FnCallNode {
+                                callee: Callee::Primitive(match operator.token {
+                                    STAR => PrimitiveFuncType::Mul,
+                                    SLASH => PrimitiveFuncType::Div,
+                                    _ => unreachable!(),
+                                }),
+                                args: vec![left, right],
                             }
                             .into(),
                         )
@@ -255,11 +277,19 @@ fn factor(tokens: &mut Lexer) -> Result<Expr> {
 }
 
 fn unary(tokens: &mut Lexer) -> Result<Expr> {
+    enum ans {
+        YES,
+        NO,
+    }
     if let Some(operator) = match_next!(tokens, BANG | MINUS) {
-        Ok(Expr::UnaryOperation(
-            UnaryOperationNode {
-                operator: operator.token.try_into()?,
-                right: unary(tokens)?,
+        Ok(Expr::FnCall(
+            FnCallNode {
+                callee: Callee::Primitive(match operator.token {
+                    BANG => PrimitiveFuncType::Not,
+                    MINUS => PrimitiveFuncType::Neg,
+                    _ => unreachable!(),
+                }),
+                args: vec![unary(tokens)?],
             }
             .into(),
         ))
@@ -279,7 +309,13 @@ fn fncall(tokens: &mut Lexer) -> Result<Expr> {
             }
         }
         expect_next!(tokens, CLOSE_PAREN)?;
-        Ok(Expr::FnCall(FnCallNode { callee, args }.into()))
+        Ok(Expr::FnCall(
+            FnCallNode {
+                callee: Callee::Expression(callee),
+                args,
+            }
+            .into(),
+        ))
     } else {
         Ok(callee)
     }
@@ -287,12 +323,14 @@ fn fncall(tokens: &mut Lexer) -> Result<Expr> {
 
 fn typesignature(tokens: &mut Lexer) -> Result<OptionalTypeSignature> {
     if match_next!(tokens, OPEN_BRACKET).is_some() {
-        let t_decl: Option<DataTypeTag> = if let Some(TokenData {
+        let t_decl: Option<Type> = if let Some(TokenData {
             token: IDENTIFIER(t_id),
             ..
         }) = match_next!(tokens, IDENTIFIER(_))
         {
-            Some(DataTypeTag::from_str(&t_id)?)
+            // Some(Type::from_str(&t_id)?)
+            //
+            None // ignore this for now while we work out types
         } else {
             None
         };
@@ -305,7 +343,7 @@ fn typesignature(tokens: &mut Lexer) -> Result<OptionalTypeSignature> {
                     }) => Some(
                         n_str
                             .parse::<usize>()
-                            .or(parse_err!("shape expects an unsigned int")),
+                            .or(Err(parse_err!("shape expects an unsigned int"))),
                     ),
                     _ => None,
                 })
@@ -348,30 +386,20 @@ fn closure(tokens: &mut Lexer) -> Result<Expr> {
 }
 fn primary(tokens: &mut Lexer) -> Result<Expr> {
     if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-        Ok(Expr::Term(
-            TermNode {
-                name: name.try_into()?,
-            }
-            .into(),
-        ))
+        Ok(term_node(name.try_into()?))
     } else if match_next!(tokens, OPEN_PAREN).is_some() {
         match expression(tokens) {
-            Ok(expression) => {
+            Ok(expr) => {
                 let _ = match_next!(tokens, CLOSE_PAREN)
                     .ok_or(parse_failure!(tokens, "expected closing paren"))?;
-                Ok(Expr::Grouping(GroupingNode { expression }.into()))
+                Ok(expr)
             }
             Err(e) => Err(e),
         }
     } else if let Some(value) =
         match_next!(tokens, FALSE | TRUE | INTEGER_LITERAL(_) | FLOAT_LITERAL(_))
     {
-        Ok(Expr::Literal(
-            LiteralNode {
-                value: DataType::Atomic(value.into()),
-            }
-            .into(),
-        ))
+        Ok(atom_literal_node(value.try_into()?))
     } else {
         array_frame(tokens)
     }
@@ -401,24 +429,14 @@ fn array_frame(tokens: &mut Lexer) -> Result<Expr> {
 fn sequence(tokens: &mut Lexer) -> Result<Expr> {
     let seq = atomic_sequence(tokens)?;
     if seq.len() > 1 {
-        Ok(Expr::Literal(
-            LiteralNode {
-                value: DataType::Array(ArrayType::parse_seq(seq)?),
-            }
-            .into(),
-        ))
+        Ok(array_literal_node(seq))
     } else {
-        Ok(Expr::Literal(
-            LiteralNode {
-                value: DataType::Atomic(seq[0].clone()),
-            }
-            .into(),
-        ))
+        Ok(atom_literal_node(seq[0].clone()))
     }
 }
 
-fn atomic_sequence(tokens: &mut Lexer) -> Result<Vec<AtomicType>> {
-    Ok((0..)
+fn atomic_sequence(tokens: &mut Lexer) -> Result<Vec<Literal>> {
+    (0..)
         .map_while(|i| {
             if i == 0 {
                 Some(
@@ -434,54 +452,5 @@ fn atomic_sequence(tokens: &mut Lexer) -> Result<Vec<AtomicType>> {
                 None
             }
         })
-        .process_results(|iter| iter.map(|t| t.into()).collect()))?
+        .process_results(|iter| iter.map(Literal::try_from).collect())?
 }
-
-// HELPERS
-
-trait ParseSequence<I> {
-    fn parse_seq(seq: I) -> Result<Self>
-    where
-        Self: Sized;
-}
-
-macro_rules! parse_sequence_number_impl {
-    ($($variant_name:ident($inner_type:ty),)*) => {
-    impl<I: IntoIterator<Item=AtomicType>> ParseSequence<I> for ArrayType {
-        fn parse_seq(seq: I) -> Result<Self> {
-            let mut seq = seq.into_iter().peekable();
-            match seq.peek() {
-                None => Err(LangError::ParseErr("tried to parse empty sequence".to_string())),
-                $(Some(AtomicType::$variant_name(_)) => Ok(ArrayType::$variant_name(Array::from_iter(
-                    seq
-                    .map(|i| {
-                        if let AtomicType::$variant_name(n) = i {
-                            Ok(n)
-                        } else {
-                            Err(LangError::CompileErr("expected uniform types".to_owned()))
-                        }
-                    })
-                    .collect::<Result<Vec<$inner_type>>>()?,
-                ))),
-                )*
-                _ => todo!()
-            }
-        }
-    }
-    };
-}
-parse_sequence_number_impl!(
-    UInt8(u8),
-    Int8(i8),
-    UInt16(u16),
-    Int16(i16),
-    UInt32(u32),
-    Int32(i32),
-    Int64(i64),
-    UInt64(u64),
-    BFloat16(half::bf16),
-    Float16(half::f16),
-    Float32(f32),
-    Float64(f64),
-    Complex(num::Complex<f32>),
-);

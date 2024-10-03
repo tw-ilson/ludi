@@ -17,24 +17,25 @@ macro_rules! delims {
         "+"|"-"|"*"|"/"|">"|"<"|"."|";"|","|"["|"]"|"{"|"}"|"("|")"|"|"
     };
 }
-pub use crate::tokens::*;
+
+use crate::token::{Token, TokenData, Location};
+use Token::*;
 use std::iter::Peekable;
 use std::str::Chars;
 use unicode_segmentation::{Graphemes, UnicodeSegmentation};
-use Token::*;
 
-pub type Lexer<'a> = Peekable<TokenStream<'a>>;
-pub fn lex<'a>(s: &'a str) -> Lexer<'a> {
+pub type Lexer = Peekable<TokenStream>;
+pub fn lex(s: &'static str) -> Lexer {
     TokenStream::new(s).peekable()
 }
 
 #[derive(Clone)]
-pub struct TokenStream<'a> {
-    source: Peekable<Graphemes<'a>>,
+pub struct TokenStream {
+    source: Peekable<Graphemes<'static>>,
     line: usize,
     eof: bool,
 }
-impl<'a> Iterator for TokenStream<'a> {
+impl Iterator for TokenStream {
     type Item = TokenData;
     fn next(&mut self) -> Option<Self::Item> {
         let mut charlist: String = String::new();
@@ -58,7 +59,7 @@ impl<'a> Iterator for TokenStream<'a> {
                     if let Some(token) = self.complete_token(&mut charlist) {
                         return Some(TokenData {
                             token,
-                            line: self.line,
+                            loc: Location { line: self.line },
                         });
                     } else {
                         panic!("remove trailing tokens");
@@ -68,15 +69,15 @@ impl<'a> Iterator for TokenStream<'a> {
             if let Some(token) = self.complete_token(&mut charlist) {
                 return Some(TokenData {
                     token,
-                    line: self.line,
+                    loc: Location { line: self.line },
                 });
             }
         }
     }
 }
 
-impl<'a> TokenStream<'a> {
-    pub fn new(text: &'a str) -> Self {
+impl TokenStream {
+    pub fn new(text: &'static str) -> Self {
         Self {
             source: text.graphemes(true).peekable(),
             line: 1,
@@ -224,6 +225,7 @@ impl<'a> TokenStream<'a> {
                 {
                     Some(IDENTIFIER(charlist.clone()))
                 } else {
+                    // possible error here if we want to avoid creating bad idents
                     None
                 }
             }

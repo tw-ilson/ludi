@@ -6,20 +6,14 @@
 #![allow(dead_code)]
 
 pub mod err;
-pub mod tokens;
+pub mod token;
 pub mod lex;
 pub mod parser;
+pub mod shape;
 pub mod ast;
-pub mod data;
-pub mod atomic;
-pub mod array;
-pub mod env;
-pub mod ops;
-pub mod normalize;
-
-pub mod typecheck;
-
-pub mod r#fn;
-pub mod pipeline;
-// pub mod codegen;
-// pub mod dialect;
+mod atomic;
+mod env;
+mod types;
+mod pipeline;
+mod codegen;
+mod optimize;
