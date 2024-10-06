@@ -1,5 +1,4 @@
-use crate::err::{Error, ErrorKind, Result};
-use crate::parse_err;
+use crate::err::{Error, ErrorKind, LudiError, Result};
 use crate::token::{Location, Token, TokenData};
 use std::fmt::{write, Debug, Display};
 use std::hash::Hash;
@@ -22,7 +21,7 @@ impl TryFrom<TokenData> for Literal {
             Token::FLOAT_LITERAL(atom) => Literal::Float { loc, atom },
             Token::TRUE => Literal::Bool { loc, atom: true },
             Token::FALSE => Literal::Bool { loc, atom: false },
-            _ => Err(parse_err!(format!("Expected atomic value at location: {}", loc)))?,
+            _ => Err(Error::at_token(value, "Expected atomic value"))?,
         })
     }
 }

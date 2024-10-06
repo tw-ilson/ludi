@@ -2,12 +2,14 @@ use std::env;
 use std::fs;
 use std::io;
 
+use crate::interpret::DynamicEnv;
 use crate::interpret::Interpret;
 use libludi::ast::Expr;
 use libludi::ast::ParseTree;
+use libludi::ast::Stmt;
 use libludi::env::{Env, EnvRef};
-use libludi::err::{LangError, Result};
-use libludi::parser::expression;
+use libludi::err::{Error, Result};
+use libludi::parser::{statement, expression};
 use libludi::parser::Parser;
 use libludi::lex::lex;
 use rustyline::error::ReadlineError;
@@ -21,7 +23,7 @@ pub enum LudiExit {
 
 pub fn repl() -> Result<()> {
     let mut rl = DefaultEditor::new().expect("readline failure?");
-    let e: EnvRef = Env::default().into();
+    let mut e: DynamicEnv = Env::default().into();
     #[cfg(feature = "with-file-history")]
     if rl.load_history("$LUDIPATH/history.txt").is_err() {
         println!("No previous history.");
@@ -31,7 +33,7 @@ pub fn repl() -> Result<()> {
         match readline {
             Ok(line) => {
                 let _ = rl.add_history_entry(line.as_str());
-                run(&line, e.clone())?;
+                run(&line, &mut e)?;
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -52,7 +54,7 @@ pub fn repl() -> Result<()> {
     Ok(())
 }
 
-pub fn run(source: &str, e: EnvRef) -> Result<LudiExit> {
+pub fn run(source: &str, e: &mut DynamicEnv) -> Result<LudiExit> {
     let dump_ast: bool = env::var("DUMP_AST").is_ok();
     let dump_tokens: bool = env::var("DUMP_TOKENS").is_ok();
     let mut tokens = lex(source);
@@ -61,12 +63,12 @@ pub fn run(source: &str, e: EnvRef) -> Result<LudiExit> {
             println!("{:?}", t.token);
         })
     };
-    let p: Expr = expression(&mut tokens).unwrap();
+    let p: Stmt = statement(&mut tokens).unwrap();
     // for stmt in p {
         if dump_ast {
             println!("{:#?}", &p);
         }
-        if let Err(e) = p.interpret(e.clone()) {
+        if let Err(e) = p.interpret(e) {
             println!("{}", e);
         }
     // }
@@ -74,8 +76,8 @@ pub fn run(source: &str, e: EnvRef) -> Result<LudiExit> {
 }
 
 fn run_file(filename: String) -> Result<LudiExit> {
-    let e = Env::new(None);
+    let mut e = DynamicEnv::new(None);
     let mut source = fs::read_to_string(filename).expect("Failed to read file");
-    run(&mut source, e.into())?;
+    run(&mut source, &mut e)?;
     Ok(LudiExit::Success)
 }

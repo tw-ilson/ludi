@@ -1,29 +1,56 @@
+use super::codewriter;
+use crate::err::Result;
 use crate::types;
 
-impl super::codewriter::MLIRGen<melior::ir::Type<'_>> for types::Type {
-    fn mlir_gen(self, context: &melior::Context) -> melior::ir::Type<'static> {
-        match self {
+impl<'c> codewriter::MLIRGen<'c, melior::ir::Type<'c>> for types::Type {
+    fn mlir_gen(self, context: &'c melior::Context) -> Result<melior::ir::Type<'c>> {
+        Ok(match self {
             Self::Atom(atom) => match atom {
-                crate::types::Atom::Literal(datatype) => match datatype {
-                    types::AtomicDataType::Boolean => melior::ir::Type::from(melior::ir::r#type::IntegerType::),
+                types::Atom::Literal(datatype) => match datatype {
+                    types::AtomicDataType::Float16 => melior::ir::r#type::Type::float16(context),
+                    types::AtomicDataType::BFloat16 => melior::ir::r#type::Type::bfloat16(context),
+                    types::AtomicDataType::Float32 => melior::ir::r#type::Type::float32(context),
+                    types::AtomicDataType::Float64 => melior::ir::r#type::Type::float64(context),
+                    types::AtomicDataType::Complex => melior::ir::r#type::Type::complex(
+                        melior::ir::r#type::Type::float32(context),
+                    ),
+                    types::AtomicDataType::UInt8 => {
+                        melior::ir::r#type::IntegerType::unsigned(context, 8).into()
+                    }
+                    types::AtomicDataType::Int8 => {
+                        melior::ir::r#type::IntegerType::signed(context, 8).into()
+                    }
+                    types::AtomicDataType::UInt16 => {
+                        melior::ir::r#type::IntegerType::unsigned(context, 16).into()
+                    }
+                    types::AtomicDataType::Int16 => {
+                        melior::ir::r#type::IntegerType::signed(context, 16).into()
+                    }
+                    types::AtomicDataType::UInt32 => {
+                        melior::ir::r#type::IntegerType::unsigned(context, 32).into()
+                    }
+                    types::AtomicDataType::Int32 => {
+                        melior::ir::r#type::IntegerType::signed(context, 32).into()
+                    }
+                    types::AtomicDataType::UInt64 => {
+                        melior::ir::r#type::IntegerType::unsigned(context, 64).into()
+                    }
+                    types::AtomicDataType::Int64 => {
+                        melior::ir::r#type::IntegerType::signed(context, 64).into()
+                    }
+                    types::AtomicDataType::Boolean => {
+                        melior::ir::r#type::IntegerType::unsigned(context, 1).into()
+                    }
                     types::AtomicDataType::Character => todo!(),
-                    types::AtomicDataType::UInt8 => todo!(),
-                    types::AtomicDataType::Int8 => todo!(),
-                    types::AtomicDataType::UInt16 => todo!(),
-                    types::AtomicDataType::Int16 => todo!(),
-                    types::AtomicDataType::UInt32 => todo!(),
-                    types::AtomicDataType::Int32 => todo!(),
-                    types::AtomicDataType::UInt64 => todo!(),
-                    types::AtomicDataType::Int64 => todo!(),
-                    types::AtomicDataType::Float16 => todo!(),
-                    types::AtomicDataType::BFloat16 => todo!(),
-                    types::AtomicDataType::Float32 => todo!(),
-                    types::AtomicDataType::Float64 => todo!(),
-                    types::AtomicDataType::Complex => todo!()
                 },
-                _ => todo!()
+                types::Atom::AtomRef(name) => todo!(),
+                types::Atom::Pi(pi) => todo!(),
+                types::Atom::Sigma(sigma) => todo!(),
+                types::Atom::Func(func) => todo!(),
+                types::Atom::Forall(forall) => todo!(),
             },
-            Self::Array(..) => todo!()
-        }
+            Self::Array(types::Array::ArrayRef(name)) => todo!(),
+            Self::Array(types::Array::Arr(arr)) => todo!(),
+        })
     }
 }

@@ -1,5 +1,6 @@
 use crate::{
     // allocator::BlockError,
+    env::Name,
     token::TokenData,
 };
 use anyhow;
@@ -42,49 +43,35 @@ pub enum ErrorKind {
 // re-export of anyhow result type
 pub type Result<T> = anyhow::Result<T>;
 pub type Error = anyhow::Error;
+pub trait LudiError {
+    fn with_name(name: Name, msg: &str) -> Self;
+    fn at_token(tok: TokenData, msg: &str) -> Self;
+    fn runtime_err(msg: &'static str) -> Self;
+    fn parse_err(msg: &'static str) -> Self;
+    fn compile_err(msg: &'static str) -> Self;
+    fn codegen_err(msg: &'static str) -> Self;
+}
 
-#[macro_export]
-macro_rules! err_at_tok_msg {
-    ($tok:expr, $message:expr) => {
-        format!(
+impl LudiError for Error {
+    fn with_name(name: Name, msg: &str) -> Self {
+        Error::msg(format!("Error at {}: {}", name, msg))
+    }
+    fn at_token(tok: TokenData, msg: &str) -> Self {
+        Error::msg(format!(
             "Error line {}: unexpected {:?}; {}",
-            $tok.loc, $tok.token, $message
-        )
-    };
+            tok.loc, tok.token, msg
+        ))
+    }
+    fn runtime_err(msg: &'static str) -> Self {
+        Error::new(ErrorKind::RuntimeErr).context(msg)
+    }
+    fn parse_err(msg: &'static str) -> Self {
+        Error::new(ErrorKind::ParseErr).context(msg)
+    }
+    fn compile_err(msg: &'static str) -> Self {
+        Error::new(ErrorKind::CompileErr).context(msg)
+    }
+    fn codegen_err(msg: &'static str) -> Self {
+        Error::new(ErrorKind::CodeGenErr).context(msg)
+    }
 }
-#[macro_export]
-macro_rules! runtime_err {
-    ($message:expr) => {
-        anyhow::Error::new(crate::err::ErrorKind::RuntimeErr).context($message)
-    };
-}
-#[macro_export]
-macro_rules! lex_err {
-    ($message:expr) => {
-        anyhow::Error::new(crate::err::ErrorKind::LexErr).context($message)
-    };
-}
-#[macro_export]
-macro_rules! parse_err {
-    ($message:expr) => {
-        anyhow::Error::new(crate::err::ErrorKind::ParseErr).context($message)
-    };
-}
-#[macro_export]
-macro_rules! compile_err {
-    ($message:expr) => {
-        anyhow::Error::new(crate::err::ErrorKind::CompileErr).context($message)
-    };
-}
-#[macro_export]
-macro_rules! codegen_err {
-    ($message:expr) => {
-        anyhow::Error::new(crate::err::ErrorKind::CodeGenErr).context($message)
-    };
-}
-pub use codegen_err;
-pub use compile_err;
-pub use err_at_tok_msg;
-pub use lex_err;
-pub use parse_err;
-pub use runtime_err;

@@ -3,10 +3,8 @@ name = "libludi"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-ambassador = "0.4.1" # Delegate proc_macro
+ambassador = "0.4.1" # Delegate proc_macro, useful
 anyhow = { version="1.0.86", features=["backtrace"]} # nicer std::Error
 derive_more = "0.99.17" # Derive for fmt::Display
 half = "2.4.1" # half-precision floats
@@ -17,8 +15,8 @@ thiserror = "1.0.61" # derive macro for std::Error
 unicode-segmentation = "1.11.0" # unicode character for lexer
 melior = { version = "0.18.5", features = ["ods-dialects"], path="../../melior/melior" } # MLIR
 paste = "1.0.15" # identifier concat in macros
-serde = "1.0.210"
+serde = { version = "1.0.210", features=["derive"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4.0" # pretty-prints assertion failures
-
+tempfile = "3.13.0"

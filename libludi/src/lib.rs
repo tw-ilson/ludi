@@ -5,15 +5,18 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+const LLVM_MAJOR_VERSION: usize = 18;
+
+pub mod utils;
 pub mod err;
 pub mod token;
 pub mod lex;
 pub mod parser;
 pub mod shape;
 pub mod ast;
-mod atomic;
-mod env;
-mod types;
-mod pipeline;
-mod codegen;
-mod optimize;
+pub mod atomic;
+pub mod env;
+pub mod types;
+pub mod pipeline;
+pub mod codegen;
+pub mod optimize;

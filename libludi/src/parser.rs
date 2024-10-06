@@ -4,7 +4,7 @@ use crate::{
     ast::*,
     atomic::Literal,
     env::Name,
-    err::{err_at_tok_msg, parse_err, Result},
+    err::{Error, LudiError,  Result},
     lex::{lex, Lexer},
     shape::{Shape, ShapeVec},
     token::{Location, Token, TokenData},
@@ -18,7 +18,7 @@ use Token::*;
 pub trait Parser {
     fn parse(&mut self) -> Result<Expr>;
 }
-impl Parser for Lexer {
+impl Parser for Lexer<'_> {
     fn parse(&mut self) -> Result<Expr> {
         // (0..).map_while(|_| expression(self)).collect()
         expression(self)
@@ -28,15 +28,15 @@ impl Parser for Lexer {
 macro_rules! parse_failure {
     ($tokens:ident, $msg:expr) => {
         if let Some(bad_tok) = $tokens.peek() {
-            parse_err!(err_at_tok_msg!(bad_tok.clone(), $msg))
+            Error::at_token(bad_tok.clone(), $msg)
         } else {
-            parse_err!(err_at_tok_msg!(
+            Error::at_token(
                 TokenData {
                     token: EOF,
                     loc: Location { line: 0 },
                 },
                 "reached end of file unexpectedly!"
-            ))
+            )
         }
     };
 }
@@ -54,54 +54,34 @@ macro_rules! expect_next {
     ($tokens:ident, $types:pat) => {
         match_next!($tokens, $types).ok_or(parse_failure!(
             $tokens,
-            format!("expected {}", stringify!($types))
+            &format!("expected {}", stringify!($types))
         ))
     };
 }
 
-// pub fn declaration(tokens: &mut Lexer) -> Result<Stmt> {
-//     let mut tokens2 = tokens.clone();
-//     if let Some(name) = match_next!(tokens, IDENTIFIER(..)) {
-//         if match_next!(tokens, EQUAL).is_some() {
-//             Ok(Expr::Let(
-//                 LetNode {
-//                     name: name.try_into()?,
-//                     initializer: expression(tokens)?,
-//                     region: None,
-//                 }
-//                 .into(),
-//             ))
-//         } else {
-//             statement(&mut tokens2)
-//         }
-//     } else {
-//         statement(tokens)
-//     }
-// }
-
-// pub fn statement(tokens: &mut Lexer) -> Result<Stmt> {
-//     if match_next!(tokens, PRINT).is_some() {
-//         Ok(Stmt::PrintStmt(
-//             PrintStmtNode {
-//                 expression: expression(tokens)?,
-//             }
-//             .into(),
-//         ))
-//     // } else if match_next!(tokens, OPEN_BRACE).is_some() {
-//     //     block(tokens)
-//     } else {
-//         Ok(Stmt::ExprStmt(
-//             ExprStmtNode {
-//                 expression: expression(tokens)?,
-//             }
-//             .into(),
-//         ))
-//     }
-//     // match_next!(tokens, SEMICOLON).expect("expected semicolon")
-// }
+pub fn statement(tokens: &mut Lexer) -> Result<Stmt> {
+    if match_next!(tokens, PRINT).is_some() {
+        Ok(Stmt::PrintStmt(
+            PrintStmtNode {
+                expression: expression(tokens)?,
+            }
+            .into(),
+        ))
+    // } else if match_next!(tokens, OPEN_BRACE).is_some() {
+    //     block(tokens)
+    } else {
+        Ok(Stmt::ExprStmt(
+            ExprStmtNode {
+                expression: expression(tokens)?,
+            }
+            .into(),
+        ))
+    }
+    // match_next!(tokens, SEMICOLON).expect("expected semicolon")
+}
 
 pub fn expression(tokens: &mut Lexer) -> Result<Expr> {
-    letexpr(tokens)
+    fndef(tokens)
 }
 
 fn letexpr(tokens: &mut Lexer) -> Result<Expr> {
@@ -116,7 +96,9 @@ fn letexpr(tokens: &mut Lexer) -> Result<Expr> {
                     let TokenData { token, loc: _ } = expect_next!(tokens, IN | SEMICOLON)?;
                     match token {
                         IN => Some(expression(tokens)?),
-                        SEMICOLON => expression(tokens).ok(),
+                        SEMICOLON => expression(tokens).ok(), // instead of doing this, we want to
+                        // recover from an immediate EOF, for
+                        // the sake of interpreter & tests
                         _ => unreachable!(),
                     }
                 },
@@ -129,11 +111,43 @@ fn letexpr(tokens: &mut Lexer) -> Result<Expr> {
 }
 
 fn value(tokens: &mut Lexer) -> Result<Expr> {
-    fndef(tokens)
+    lambda(tokens)
+}
+
+fn lambda(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, VBAR).is_some() {
+        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
+            .map_while(|_| {
+                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
+                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
+                        Ok((name.try_into()?, typesignature(tokens)?))
+                    })())
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
+        expect_next!(tokens, VBAR)?;
+        expect_next!(tokens, ARROW)?;
+        let ret = typesignature(tokens)?;
+        expect_next!(tokens, OPEN_BRACE)?;
+        let body = expression(tokens)?;
+        expect_next!(tokens, CLOSE_BRACE)?;
+        Ok(Expr::FnDef(
+            FnDefNode {
+                signature: CallSignature { args, ret },
+                body,
+            }
+            .into(),
+        ))
+    } else {
+        equality(tokens) 
+    }
 }
 
 fn fndef(tokens: &mut Lexer) -> Result<Expr> {
     if match_next!(tokens, FN).is_some() {
+        let name: Name = expect_next!(tokens, IDENTIFIER(_))?.try_into()?;
         expect_next!(tokens, OPEN_PAREN)?;
         let args: Vec<(Name, OptionalTypeSignature)> = (0..)
             .map_while(|_| {
@@ -146,20 +160,20 @@ fn fndef(tokens: &mut Lexer) -> Result<Expr> {
                 }
             })
             .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
+        expect_next!(tokens, CLOSE_PAREN)?;
         expect_next!(tokens, ARROW)?;
         let ret = typesignature(tokens)?;
-        expect_next!(tokens, CLOSE_PAREN)?;
-        expect_next!(tokens, COLON)?;
+        expect_next!(tokens, OPEN_BRACE)?;
         let body = expression(tokens)?;
-        Ok(Expr::FnDef(
-            FnDefNode {
-                signature: CallSignature { args, ret },
-                body,
-            }
-            .into(),
+        expect_next!(tokens, CLOSE_BRACE)?;
+
+        Ok(let_node(
+            name,
+            fn_def_node(CallSignature { args, ret }, body),
+            expression(tokens).ok(),
         ))
     } else {
-        equality(tokens)
+        letexpr(tokens)
     }
 }
 
@@ -343,7 +357,7 @@ fn typesignature(tokens: &mut Lexer) -> Result<OptionalTypeSignature> {
                     }) => Some(
                         n_str
                             .parse::<usize>()
-                            .or(Err(parse_err!("shape expects an unsigned int"))),
+                            .or(Err(Error::parse_err("shape expects an unsigned int"))),
                     ),
                     _ => None,
                 })
@@ -356,34 +370,6 @@ fn typesignature(tokens: &mut Lexer) -> Result<OptionalTypeSignature> {
     }
 }
 
-fn closure(tokens: &mut Lexer) -> Result<Expr> {
-    if match_next!(tokens, VBAR).is_some() {
-        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
-            .map_while(|_| {
-                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
-                        Ok((name.try_into()?, typesignature(tokens)?))
-                    })())
-                } else {
-                    None
-                }
-            })
-            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
-        expect_next!(tokens, VBAR)?;
-        expect_next!(tokens, ARROW)?;
-        let ret = typesignature(tokens)?;
-        let body = expression(tokens)?;
-        Ok(Expr::FnDef(
-            FnDefNode {
-                signature: CallSignature { args, ret },
-                body,
-            }
-            .into(),
-        ))
-    } else {
-        expression(tokens) // NOTE: is this correct?
-    }
-}
 fn primary(tokens: &mut Lexer) -> Result<Expr> {
     if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
         Ok(term_node(name.try_into()?))

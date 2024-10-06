@@ -1,10 +1,10 @@
-use crate::compile_err;
+use anyhow::Error;
+
 use crate::token::TokenData;
 use crate::{
     atomic::Literal,
     env::{Env, Name},
-    err::{ErrorKind, Result},
-    lex_err, parse_err,
+    err::{ErrorKind, LudiError, Result},
     shape::Shape,
 };
 use std::{fmt::Display, rc::Rc, str::FromStr};
@@ -65,6 +65,8 @@ pub enum Atom {
 pub enum Type {
     Atom(Atom),
     Array(Array),
+    // Unit, // the type for expressions that evaluate to a meaningless non-value
+    // Never, // the type-error type
 }
 
 #[repr(u8)]
@@ -121,6 +123,8 @@ pub enum PrimitiveFuncType {
     Reverse,
     Filter,
     Append,
+    Rotate,
+    Iota,
     ContiguousSubArray,
     Scatter,
     If,
@@ -160,8 +164,8 @@ impl FromStr for AtomicDataType {
             "complex" => Ok(AtomicDataType::Complex),
             "char" => Ok(AtomicDataType::Character),
             "bool" => Ok(AtomicDataType::Boolean),
-            "()" => Err(lex_err!("Unit type not supported in function signature")),
-            _ => Err(lex_err!("not a known builtin type")),
+            "()" => Err(Error::parse_err("Unit type not supported in function signature")),
+            _ => Err(Error::parse_err("not a known builtin type")),
         }
     }
 }
@@ -208,9 +212,9 @@ impl TryFrom<TokenData> for PrimitiveFuncType {
                 "reduce" => Ok(PrimitiveFuncType::Reduce),
                 "filter" => Ok(PrimitiveFuncType::Filter),
                 "append" => Ok(PrimitiveFuncType::Append),
-                _ => Err(parse_err!("tried to parse a primitive function")),
+                _ => Err(Error::parse_err("tried to parse a primitive function")),
             },
-            _ => Err(parse_err!("tried to parse a primitive function")),
+            _ => Err(Error::parse_err("tried to parse a primitive function")),
         }
     }
 }
@@ -326,8 +330,6 @@ ast_typed! {
         | ArrayLiteral { value: Vec<Literal> }
         | Let { name:Name, initializer: TypedExpr, region: TypedExpr }
         | Term { name: Name }
-        // | AtomicCast {value: TypedExpr }
-        // | ShapeCast {value: TypedExpr }
     }
 }
 
@@ -383,8 +385,11 @@ impl TypeCheck<TypedExpr> for Expr {
                 }
             }
             Self::Term(node) => {
-                // dbg!(&table);
                 let ty = table.get(&node.name)?;
+                // let ty = match ty {
+                //     Type::Atom(atom) => (),
+                //     Type::Array(array) => (),
+                // };
                 Ok(typed_term_node(ty, node.name))
             }
             Self::Let(node) => {
@@ -392,7 +397,7 @@ impl TypeCheck<TypedExpr> for Expr {
                 table.put(node.name.clone(), initializer.get_type());
                 let region = match node.region {
                     Some(body) => body.type_check(table)?,
-                    None => return Err(compile_err!("dangling let body not allowed here")),
+                    None => return Err(Error::compile_err("dangling let body not allowed here")),
                 };
                 Ok(typed_let_node(
                     region.get_type(),
@@ -410,7 +415,7 @@ impl TypeCheck<TypedExpr> for Expr {
                 // and provide index to type w/ function arguments
                 todo!()
             }
-            _ => todo!(),
+            _ => todo!()
         }
     }
 }

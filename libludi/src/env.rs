@@ -1,5 +1,4 @@
-use crate::err::{parse_err, Error, ErrorKind, Result};
-use crate::err_at_tok_msg;
+use crate::err::{Error, ErrorKind, LudiError, Result};
 use crate::token::{Location, Token};
 use crate::token::{Token::IDENTIFIER, TokenData};
 use std::cell::{RefCell,OnceCell};
@@ -42,7 +41,7 @@ impl<S> Env<S> where S: Clone {
         } else if let Some(p) = &self.prev {
             p.get(ident)
         } else {
-            Err(parse_err!(format!("Unknown symbol name: {}", ident.name)))
+            Err(Error::msg(format!("Unknown symbol name: {}", ident.name)))
         }
     }
 }
@@ -71,10 +70,10 @@ impl TryFrom<TokenData> for Name {
                 loc: value.loc,
             })
         } else {
-            Err(parse_err!(err_at_tok_msg!(
+            Err(Error::at_token(
                 value,
                 "Trying to use non-identifier token as name"
-            )))
+            ))
         }
     }
 }
@@ -85,6 +84,12 @@ impl FromStr for Name {
             name: s.into(),
             loc: Location { line: 1 }
         })
+    }
+}
+
+impl From<&str> for Name {
+    fn from(value: &str) -> Self {
+        Self::from_str(value).expect("bad name")
     }
 }
 impl PartialEq for Name {

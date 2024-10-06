@@ -24,18 +24,18 @@ use std::iter::Peekable;
 use std::str::Chars;
 use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 
-pub type Lexer = Peekable<TokenStream>;
-pub fn lex(s: &'static str) -> Lexer {
+pub type Lexer<'s> = Peekable<TokenStream<'s>>;
+pub fn lex<'s>(s: &'s str) -> Lexer {
     TokenStream::new(s).peekable()
 }
 
 #[derive(Clone)]
-pub struct TokenStream {
-    source: Peekable<Graphemes<'static>>,
+pub struct TokenStream<'s> {
+    source: Peekable<Graphemes<'s>>,
     line: usize,
     eof: bool,
 }
-impl Iterator for TokenStream {
+impl Iterator for TokenStream<'_> {
     type Item = TokenData;
     fn next(&mut self) -> Option<Self::Item> {
         let mut charlist: String = String::new();
@@ -76,8 +76,8 @@ impl Iterator for TokenStream {
     }
 }
 
-impl TokenStream {
-    pub fn new(text: &'static str) -> Self {
+impl<'s> TokenStream<'s> {
+    pub fn new(text: &'s str) -> Self {
         Self {
             source: text.graphemes(true).peekable(),
             line: 1,

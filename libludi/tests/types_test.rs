@@ -49,16 +49,16 @@ fn frame_type() -> anyhow::Result<()> {
     assert_eq!(
         ty1,
         Type::Array(Array::Arr(Arr {
-            element: Atom::Literal(AtomicDataType::Boolean),
+            element: Atom::Literal(AtomicDataType::Int64),
             shape: Shape::new(&[2, 2]),
         }))
     );
-    // assert_eq!(
-    //     ty2,
-    //     Type::Array(Array::Arr(Arr {
-    //         element: Atom::Literal(AtomicDataType::Boolean), // what should this be?
-    //         shape: Shape::new(&[2,2]) ,
-    //     }))
-    // );
+    assert_eq!(
+        ty2,
+        Type::Array(Array::Arr(Arr {
+            element: Atom::Literal(AtomicDataType::Boolean), // should this be AtomRef?
+            shape: Shape::new(&[2,2]) ,
+        }))
+    );
     Ok(())
 }

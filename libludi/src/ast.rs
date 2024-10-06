@@ -2,12 +2,11 @@ use std::fmt::Display;
 use std::fs::write;
 use std::ops::Deref;
 
-use crate::compile_err;
 use crate::atomic::Literal;
 use crate::shape::{Shape, ShapeOps, ArrayProps};
 use crate::types::{Type, PrimitiveFuncType};
 use crate::env::Name;
-use crate::err::{Error, ErrorKind, Result};
+use crate::err::{Error, ErrorKind, LudiError, Result};
 use crate::token::TokenData;
 use derive_more::Display;
 use itertools::Itertools;
@@ -100,11 +99,8 @@ macro_rules! define_constructors {
     };
 }
 
-
-
 pub use define_constructors;
 pub use define_enum;
-pub use define_nodes;
 pub use ast;
 
 // AST productions for the lang of format:
@@ -183,7 +179,7 @@ impl TryFrom<OptionalTypeSignature> for TypeSignature {
         Ok(TypeSignature(
             value
                 .0
-                .ok_or(compile_err!("expected explicit type annotations"))?,
+                .ok_or(Error::compile_err("expected explicit type annotations"))?,
             value.1,
         ))
     }

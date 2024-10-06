@@ -1,14 +1,12 @@
 /* -- libudi::ops --
- * defines primitive ops supported by the language.
- *
- * TODO: This currently defines runtime behavior of operations for the interpreter, and it needs to
- * eventually be replaced by codegen in some form.
+ * dynamically handle primitive ops supported by the language.
  */
 
-use crate::array::{Array, ArrayProps};
+use crate::array::Array;
+use libludi::shape::ArrayProps;
 // use crate::atomic::{AtomicType};
-use crate::data::{Data, DataType, AtomicType, ArrayType};
-use crate::err::{LangError, Result};
+use crate::datatypes::{Data, DataType, AtomicType, ArrayType};
+use libludi::err::{Error, LudiError, Result};
 use itertools::izip;
 use num::complex::ComplexFloat;
 use num::Complex;
@@ -83,18 +81,8 @@ macro_rules! delegate_binops_arraytype {
                 type Rhs = Self;
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
                     match (self,rhs) {
-                        (ArrayType::UInt8(a), ArrayType::UInt8(b))  => Ok(ArrayType::UInt8(a.add(b)?)),
-                        (ArrayType::Int8(a), ArrayType::Int8(b))   => Ok(ArrayType::Int8(a.$fname(b)?)),
-                        (ArrayType::UInt16(a), ArrayType::UInt16(b)) => Ok(ArrayType::UInt16(a.$fname(b)?)),
-                        (ArrayType::Int16(a), ArrayType::Int16(b))  => Ok(ArrayType::Int16(a.$fname(b)?)),
-                        (ArrayType::UInt32(a), ArrayType::UInt32(b)) => Ok(ArrayType::UInt32(a.$fname(b)?)),
-                        (ArrayType::Int32(a), ArrayType::Int32(b))  => Ok(ArrayType::Int32(a.$fname(b)?)),
-                        (ArrayType::UInt64(a), ArrayType::UInt64(b)) => Ok(ArrayType::UInt64(a.$fname(b)?)),
-                        (ArrayType::Int64(a), ArrayType::Int64(b))  => Ok(ArrayType::Int64(a.$fname(b)?)),
-                        (ArrayType::BFloat16(a), ArrayType::BFloat16(b)) => Ok(ArrayType::BFloat16(a.$fname(b)?)),
-                        (ArrayType::Float16(a), ArrayType::Float16(b))  => Ok(ArrayType::Float16(a.$fname(b)?)),
-                        (ArrayType::Float32(a), ArrayType::Float32(b)) => Ok(ArrayType::Float32(a.$fname(b)?)),
-                        (ArrayType::Float64(a), ArrayType::Float64(b))  => Ok(ArrayType::Float64(a.$fname(b)?)),
+                        (ArrayType::Int(a), ArrayType::Int(b))  => Ok(ArrayType::Int(a.$fname(b)?)),
+                        (ArrayType::Float(a), ArrayType::Float(b))  => Ok(ArrayType::Float(a.$fname(b)?)),
                         (ArrayType::Complex(a), ArrayType::Complex(b))  => Ok(ArrayType::Complex(a.$fname(b)?)),
                         _ => {unimplemented!()}
                     }
@@ -146,18 +134,8 @@ macro_rules! delegate_binops_numbertype {
                 type Rhs = Self;
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
                     match (self,rhs) {
-                        (AtomicType::UInt8(a), AtomicType::UInt8(b))  => Ok(AtomicType::UInt8(a.add(b)?)),
-                        (AtomicType::Int8(a), AtomicType::Int8(b))   => Ok(AtomicType::Int8(a.$fname(b)?)),
-                        (AtomicType::UInt16(a), AtomicType::UInt16(b)) => Ok(AtomicType::UInt16(a.$fname(b)?)),
-                        (AtomicType::Int16(a), AtomicType::Int16(b))  => Ok(AtomicType::Int16(a.$fname(b)?)),
-                        (AtomicType::UInt32(a), AtomicType::UInt32(b)) => Ok(AtomicType::UInt32(a.$fname(b)?)),
-                        (AtomicType::Int32(a), AtomicType::Int32(b))  => Ok(AtomicType::Int32(a.$fname(b)?)),
-                        (AtomicType::UInt64(a), AtomicType::UInt64(b)) => Ok(AtomicType::UInt64(a.$fname(b)?)),
-                        (AtomicType::Int64(a), AtomicType::Int64(b))  => Ok(AtomicType::Int64(a.$fname(b)?)),
-                        (AtomicType::BFloat16(a), AtomicType::BFloat16(b)) => Ok(AtomicType::BFloat16(a.$fname(b)?)),
-                        (AtomicType::Float16(a), AtomicType::Float16(b))  => Ok(AtomicType::Float16(a.$fname(b)?)),
-                        (AtomicType::Float32(a), AtomicType::Float32(b)) => Ok(AtomicType::Float32(a.$fname(b)?)),
-                        (AtomicType::Float64(a), AtomicType::Float64(b))  => Ok(AtomicType::Float64(a.$fname(b)?)),
+                        (AtomicType::Int(a), AtomicType::Int(b))  => Ok(AtomicType::Int(a.$fname(b)?)),
+                        (AtomicType::Float(a), AtomicType::Float(b))  => Ok(AtomicType::Float(a.$fname(b)?)),
                         (AtomicType::Complex(a), AtomicType::Complex(b))  => Ok(AtomicType::Complex(a.$fname(b)?)),
                         _ => {unimplemented!()}
                     }
@@ -184,7 +162,7 @@ macro_rules! delegate_binops_std_array {
             type Rhs = Self;
             fn $fname(self, rhs: Self) -> Result<Self> {
                 if self.shape() != rhs.shape() {
-                    return Err(LangError::RuntimeErr("shape error".to_owned()))
+                    return Err(Error::msg("shape error"))
                 }
                 Ok(Array::new(
                     self.shape_slice(),
@@ -251,16 +229,10 @@ impl Neg for AtomicType {
     fn neg(self) -> Result<Self> where Self: Sized {
         use AtomicType::*;
         Ok(match self {
-            Int8(a) => Int8(-a),    
-            Int16(a) => Int16(-a),  
-            Int32(a) => Int32(-a),  
-            Int64(a) => Int64(-a),
-            BFloat16(a) => BFloat16(-a),
-            Float16(a) => Float16(-a),
-            Float32(a) => Float32(-a),
-            Float64(a) => Float64(-a),
+            Int(a) => Int(-a),
+            Float(a) => Float(-a),
             Complex(a) => Complex(num::Complex::new(-a.re(), a.im())), //subtracts the real
-            _ => return Err(LangError::RuntimeErr("unsupported op".to_string())),
+            _ => return Err(Error::msg("unsupported op")),
         })
     }
 }

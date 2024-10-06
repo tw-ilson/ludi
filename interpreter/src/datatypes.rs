@@ -1,12 +1,16 @@
-use crate::array::ambassador_impl_ArrayProps;
-use crate::array::ambassador_impl_ShapeOps;
-use crate::array::{Array, ArrayProps, Shape, ShapeOps};
-use crate::ast::CallSignature;
-use crate::err::{runtime_err, LangError, Result};
-use crate::{compile_err, lex_err};
+use crate::array::Array;
+
+use libludi::ast::CallSignature;
+use libludi::atomic::Literal;
+use libludi::err::{Error, LudiError, Result};
+use libludi::shape::ambassador_impl_ArrayProps;
+use libludi::shape::ambassador_impl_ShapeOps;
+use libludi::shape::{ArrayProps, Shape, ShapeOps};
+use libludi::token::Token;
 
 use ambassador::{delegatable_trait, Delegate};
 use itertools::Itertools;
+use libludi::token::TokenData;
 use std::cell::Cell;
 use std::hash::Hash;
 use std::ops::Deref;
@@ -35,20 +39,10 @@ pub struct BoxType(Box<DataType>);
 #[repr(C, u8)]
 #[derive(derive_more::Display, Debug, Clone, PartialEq)]
 pub enum AtomicType {
-    // Numberic
-    UInt8(u8) = 0,
-    Int8(i8) = 1,
-    UInt16(u16) = 2,
-    Int16(i16) = 3,
-    UInt32(u32) = 4,
-    Int32(i32) = 5,
-    Int64(i64) = 6,
-    UInt64(u64) = 7,
-    BFloat16(half::bf16) = 8,
-    Float16(half::f16) = 9,
-    Float32(f32) = 10,
-    Float64(f64) = 11,
-    Complex(num::Complex<f32>) = 12,
+    // Numeric
+    Int(isize),
+    Float(f64),
+    Complex(num::Complex<f64>),
 
     //Non-Numeric
     Character(char),
@@ -67,19 +61,9 @@ pub enum AtomicType {
 #[delegate(ShapeOps)]
 pub enum ArrayType {
     // Numbers
-    UInt8(Array<u8>) = 0,
-    Int8(Array<i8>) = 1,
-    UInt16(Array<u16>) = 2,
-    Int16(Array<i16>) = 3,
-    UInt32(Array<u32>) = 4,
-    Int32(Array<i32>) = 5,
-    Int64(Array<i64>) = 6,
-    UInt64(Array<u64>) = 7,
-    BFloat16(Array<half::bf16>) = 8,
-    Float16(Array<half::f16>) = 9,
-    Float32(Array<f32>) = 10,
-    Float64(Array<f64>) = 11,
-    Complex(Array<num::Complex<f32>>) = 12,
+    Int(Array<isize>),
+    Float(Array<f64>),
+    Complex(Array<num::Complex<f64>>),
 
     // Non-Numbers
     Character(Array<char>),
@@ -130,7 +114,9 @@ impl FromIterator<DataType> for Result<DataType> {
                             Ok(a)
                         } else {
                             //TODO: add better error information
-                            runtime_err!("Frame error: found non conforming value in frame")
+                            Err(Error::runtime_err(
+                                "Frame error: found non conforming value in frame",
+                            ))
                         }
                     })
                     .collect::<Result<Result<ArrayType>>>()??,
@@ -139,11 +125,13 @@ impl FromIterator<DataType> for Result<DataType> {
                         if let DataType::Atomic(a) = data {
                             Ok(a.upgrade())
                         } else {
-                            runtime_err!("Frame error: found non conforming value in frame")
+                            Err(Error::runtime_err(
+                                "Frame error: found non conforming value in frame",
+                            ))
                         }
                     })
                     .collect::<Result<Result<ArrayType>>>()??,
-                None => runtime_err!("Frame error: empty frame")?,
+                None => Err(Error::runtime_err("Frame error: empty frame"))?,
             }
         }))
     }
@@ -156,7 +144,7 @@ impl std::fmt::Display for BoxType {
 }
 
 impl FromStr for DataTypeTag {
-    type Err = LangError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "u8" => Ok(DataTypeTag::UInt8),
@@ -174,10 +162,16 @@ impl FromStr for DataTypeTag {
             "complex" => Ok(DataTypeTag::Complex),
             "char" => Ok(DataTypeTag::Character),
             "bool" => Ok(DataTypeTag::Boolean),
-            "box" => lex_err!("Box type not supported in function signature"),
-            "fn" => lex_err!("Fn type not suppored in function signature"),
-            "()" => lex_err!("Unit type not supported in function signature"),
-            _ => lex_err!("not a known builtin type"),
+            "box" => Err(Error::runtime_err(
+                "Box type not supported in function signature",
+            )),
+            "fn" => Err(Error::runtime_err(
+                "Fn type not suppored in function signature",
+            )),
+            "()" => Err(Error::runtime_err(
+                "Unit type not supported in function signature",
+            )),
+            _ => Err(Error::runtime_err("not a known builtin type")),
         }
     }
 }
@@ -189,12 +183,12 @@ pub struct TypeSignature(pub DataTypeTag, pub Shape);
 pub struct OptionalTypeSignature(pub Option<DataTypeTag>, pub Shape);
 
 impl TryFrom<OptionalTypeSignature> for TypeSignature {
-    type Error = LangError;
+    type Error = Error;
     fn try_from(value: OptionalTypeSignature) -> Result<Self> {
         Ok(TypeSignature(
             value
                 .0
-                .unwrap_or(compile_err!("expected explicit type annotations")?),
+                .ok_or(Error::runtime_err("expected explicit type annotations"))?,
             value.1,
         ))
     }
@@ -236,18 +230,8 @@ impl ArrayType {
     fn signature(&self) -> TypeSignature {
         use DataTypeTag::*;
         match self {
-            Self::UInt8(_) => TypeSignature(UInt8, self.shape()),
-            Self::Int8(_) => TypeSignature(Int8, self.shape()),
-            Self::UInt16(_) => TypeSignature(UInt16, self.shape()),
-            Self::Int16(_) => TypeSignature(Int16, self.shape()),
-            Self::UInt32(_) => TypeSignature(UInt32, self.shape()),
-            Self::Int32(_) => TypeSignature(Int32, self.shape()),
-            Self::Int64(_) => TypeSignature(Int64, self.shape()),
-            Self::UInt64(_) => TypeSignature(UInt64, self.shape()),
-            Self::BFloat16(_) => TypeSignature(BFloat16, self.shape()),
-            Self::Float16(_) => TypeSignature(Float16, self.shape()),
-            Self::Float32(_) => TypeSignature(Float32, self.shape()),
-            Self::Float64(_) => TypeSignature(Float64, self.shape()),
+            Self::Int(_) => TypeSignature(Int64, self.shape()),
+            Self::Float(_) => TypeSignature(Float64, self.shape()),
             Self::Complex(_) => TypeSignature(Complex, self.shape()),
             Self::Character(_) => TypeSignature(Character, self.shape()),
             Self::Boolean(_) => TypeSignature(Boolean, self.shape()),
@@ -270,18 +254,8 @@ impl AtomicType {
     }
     pub fn upgrade(self) -> ArrayType {
         match self {
-            Self::UInt8(x) => ArrayType::UInt8(Array::scaler(x)),
-            Self::Int8(x) => ArrayType::Int8(Array::scaler(x)),
-            Self::UInt16(x) => ArrayType::UInt16(Array::scaler(x)),
-            Self::Int16(x) => ArrayType::Int16(Array::scaler(x)),
-            Self::UInt32(x) => ArrayType::UInt32(Array::scaler(x)),
-            Self::Int32(x) => ArrayType::Int32(Array::scaler(x)),
-            Self::UInt64(x) => ArrayType::UInt64(Array::scaler(x)),
-            Self::Int64(x) => ArrayType::Int64(Array::scaler(x)),
-            Self::BFloat16(x) => ArrayType::BFloat16(Array::scaler(x)),
-            Self::Float16(x) => ArrayType::Float16(Array::scaler(x)),
-            Self::Float32(x) => ArrayType::Float32(Array::scaler(x)),
-            Self::Float64(x) => ArrayType::Float64(Array::scaler(x)),
+            Self::Int(x) => ArrayType::Int(Array::scaler(x)),
+            Self::Float(x) => ArrayType::Float(Array::scaler(x)),
             Self::Complex(x) => ArrayType::Complex(Array::scaler(x)),
             Self::Character(c) => ArrayType::Character(Array::scaler(c)),
             Self::Boolean(b) => ArrayType::Boolean(Array::scaler(b)),
@@ -302,16 +276,14 @@ impl From<TokenData> for AtomicType {
         use AtomicType::*;
         use Token::*;
         match value.token {
-            FLOAT_LITERAL(literal) => Float64(
+            FLOAT_LITERAL(literal) => Float(
                 literal
                     .parse::<f64>()
                     .expect("uncaught error. expected floating point literal"),
             ),
-            INTEGER_LITERAL(literal) => Int64(
-                literal
-                    .parse::<i64>()
-                    .expect("uncaught error. expected integer literal"),
-            ),
+            INTEGER_LITERAL(literal) => Int(literal
+                .parse::<isize>()
+                .expect("uncaught error. expected integer literal")),
             TRUE => Boolean(true),
             FALSE => Boolean(false),
             _ => {
@@ -319,5 +291,19 @@ impl From<TokenData> for AtomicType {
                 panic!()
             }
         }
+    }
+}
+
+impl From<Literal> for DataType {
+    fn from(value: Literal) -> Self {
+        Self::Atomic(match value {
+            Literal::Int { atom, .. } => AtomicType::Int(atom.parse().unwrap()),
+            Literal::Float { atom, .. } => AtomicType::Float(atom.parse().unwrap()),
+            Literal::Bool { atom, .. } => AtomicType::Boolean(atom),
+            Literal::Char { atom, .. } => AtomicType::Character({
+                assert_eq!(atom.len(), 1);
+                atom.chars().next().unwrap()
+            }),
+        })
     }
 }

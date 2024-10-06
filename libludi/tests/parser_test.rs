@@ -6,9 +6,11 @@ use libludi::err::ErrorKind;
 use libludi::err::ParseError;
 use libludi::lex::lex;
 use libludi::parser::*;
+use libludi::shape::Shape;
 use libludi::token::*;
 use libludi::types::PrimitiveFuncType;
 use pretty_assertions::assert_eq;
+use smallvec::smallvec;
 use std::str::FromStr;
 use std::vec;
 
@@ -359,7 +361,7 @@ fn test_binary_operation() -> anyhow::Result<()> {
 #[test]
 fn test_fndef() -> anyhow::Result<()> {
     use std::str::FromStr;
-    let prg = expression(&mut lex("fn (a[3] b[3] -> [3]) : a + b"))?;
+    let prg = expression(&mut lex("|a[3] b[3]|  -> [3] { a + b }"))?;
     assert_eq!(
         prg,
         Expr::FnDef(
@@ -406,61 +408,68 @@ fn test_fndef() -> anyhow::Result<()> {
 #[test]
 fn test_fndef_complex_body() -> anyhow::Result<()> {
     use std::str::FromStr;
-    let prg = expression(&mut lex("fn (x[5] y[5] -> [5]) : (x + y) * 2"))?;
+    let prg = expression(&mut lex("fn foo(x[5] y[5]) -> [5] { (x + y) * 2 }"))?;
     assert_eq!(
         prg,
-        Expr::FnDef(
-            FnDefNode {
-                signature: CallSignature {
-                    args: vec![
-                        (
-                            Name::from_str("x")?,
-                            OptionalTypeSignature(None, smallvec::smallvec![5].into())
-                        ),
-                        (
-                            Name::from_str("y")?,
-                            OptionalTypeSignature(None, smallvec::smallvec![5].into())
-                        ),
-                    ],
-                    ret: OptionalTypeSignature(None, smallvec::smallvec![5].into()),
-                },
-                body: Expr::FnCall(
-                    FnCallNode {
-                        callee: Callee::Primitive(PrimitiveFuncType::Mul),
-                        args: vec![
-                            Expr::FnCall(
-                                FnCallNode {
-                                    callee: Callee::Primitive(PrimitiveFuncType::Add),
-                                    args: vec![
-                                        Expr::Term(
-                                            TermNode {
-                                                name: Name::from_str("x")?
+        Expr::Let(
+            LetNode {
+                name: Name::from("foo"),
+                initializer: Expr::FnDef(
+                    FnDefNode {
+                        signature: CallSignature {
+                            args: vec![
+                                (
+                                    Name::from_str("x")?,
+                                    OptionalTypeSignature(None, smallvec::smallvec![5].into())
+                                ),
+                                (
+                                    Name::from_str("y")?,
+                                    OptionalTypeSignature(None, smallvec::smallvec![5].into())
+                                ),
+                            ],
+                            ret: OptionalTypeSignature(None, smallvec::smallvec![5].into()),
+                        },
+                        body: Expr::FnCall(
+                            FnCallNode {
+                                callee: Callee::Primitive(PrimitiveFuncType::Mul),
+                                args: vec![
+                                    Expr::FnCall(
+                                        FnCallNode {
+                                            callee: Callee::Primitive(PrimitiveFuncType::Add),
+                                            args: vec![
+                                                Expr::Term(
+                                                    TermNode {
+                                                        name: Name::from_str("x")?
+                                                    }
+                                                    .into()
+                                                ),
+                                                Expr::Term(
+                                                    TermNode {
+                                                        name: Name::from_str("y")?
+                                                    }
+                                                    .into()
+                                                )
+                                            ]
+                                        }
+                                        .into()
+                                    ),
+                                    Expr::AtomLiteral(
+                                        AtomLiteralNode {
+                                            value: Literal::Int {
+                                                loc: Location { line: 1 },
+                                                atom: String::from("2")
                                             }
-                                            .into()
-                                        ),
-                                        Expr::Term(
-                                            TermNode {
-                                                name: Name::from_str("y")?
-                                            }
-                                            .into()
-                                        )
-                                    ]
-                                }
-                                .into()
-                            ),
-                            Expr::AtomLiteral(
-                                AtomLiteralNode {
-                                    value: Literal::Int {
-                                        loc: Location { line: 1 },
-                                        atom: String::from("2")
-                                    }
-                                }
-                                .into()
-                            )
-                        ]
+                                        }
+                                        .into()
+                                    )
+                                ]
+                            }
+                            .into()
+                        )
                     }
                     .into()
-                )
+                ),
+                region: None
             }
             .into()
         )
@@ -610,16 +619,119 @@ fn test_frame1() -> anyhow::Result<()> {
     Ok(())
 }
 
+// #[test]
+// fn test_frame_illegal() -> anyhow::Result<()> {
+//     let expr = expression(&mut lex("[[7 1 2]
+//               [9 5]
+//               [2 0 5]]"));
+//     assert!(expr.is_err());
+//     Ok(())
+// }
+
 #[test]
-fn test_frame_illegal() -> anyhow::Result<()> {
-    let expr = expression(&mut lex(
-            "[[7 1 2]
-              [9 5]
-              [2 0 5]]"
-            ));
-    dbg!(expr.unwrap());
-    panic!();
-    // assert!(expr.is_err());
+fn diff_square() -> anyhow::Result<()> {
+    let expr = expression(&mut lex("
+        fn diff_square(x[0] y[0]) -> [0] {
+            x*x - y*y
+        }
+    "))?;
+    assert_eq!(
+        expr,
+        Expr::Let(
+            LetNode {
+                name: Name {
+                    name: "diff_square".to_string(),
+                    loc: Location { line: 2 },
+                },
+                initializer: Expr::FnDef(
+                    FnDefNode {
+                        signature: CallSignature {
+                            args: vec![
+                                (
+                                    Name {
+                                        name: "x".to_string(),
+                                        loc: Location { line: 2 },
+                                    },
+                                    OptionalTypeSignature(None, Shape::new(&[0],),),
+                                ),
+                                (
+                                    Name {
+                                        name: "y".to_string(),
+                                        loc: Location { line: 2 },
+                                    },
+                                    OptionalTypeSignature(None, Shape::new(&[0]),),
+                                ),
+                            ],
+                            ret: OptionalTypeSignature(None, Shape::new(&[0])),
+                        },
+                        body: Expr::FnCall(
+                            FnCallNode {
+                                callee: Callee::Primitive(PrimitiveFuncType::Sub,),
+                                args: vec![
+                                    Expr::FnCall(
+                                        FnCallNode {
+                                            callee: Callee::Primitive(PrimitiveFuncType::Mul,),
+                                            args: vec![
+                                                Expr::Term(
+                                                    TermNode {
+                                                        name: Name {
+                                                            name: "x".to_string(),
+                                                            loc: Location { line: 3 },
+                                                        },
+                                                    }
+                                                    .into(),
+                                                ),
+                                                Expr::Term(
+                                                    TermNode {
+                                                        name: Name {
+                                                            name: "x".to_string(),
+                                                            loc: Location { line: 3 },
+                                                        },
+                                                    }
+                                                    .into(),
+                                                ),
+                                            ],
+                                        }
+                                        .into(),
+                                    ),
+                                    Expr::FnCall(
+                                        FnCallNode {
+                                            callee: Callee::Primitive(PrimitiveFuncType::Mul,),
+                                            args: vec![
+                                                Expr::Term(
+                                                    TermNode {
+                                                        name: Name {
+                                                            name: "y".to_string(),
+                                                            loc: Location { line: 3 },
+                                                        },
+                                                    }
+                                                    .into(),
+                                                ),
+                                                Expr::Term(
+                                                    TermNode {
+                                                        name: Name {
+                                                            name: "y".to_string(),
+                                                            loc: Location { line: 3 },
+                                                        },
+                                                    }
+                                                    .into(),
+                                                ),
+                                            ],
+                                        }
+                                        .into(),
+                                    ),
+                                ],
+                            }
+                            .into(),
+                        ),
+                    }
+                    .into(),
+                ),
+                region: None,
+            }
+            .into(),
+        )
+    );
     Ok(())
 }
 

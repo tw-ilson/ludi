@@ -68,3 +68,6 @@ impl From<ShapeVec> for Shape {
         Self { s: value }
     }
 }
+pub struct SmallVecDeque {
+
+}

@@ -1,3 +1,4 @@
+use libludi::codegen::codewriter::load_builtin_dialects;
 use melior::{
     dialect::{arith, func},
     ir::{
@@ -6,15 +7,9 @@ use melior::{
 };
 
 #[test]
-fn test_context() {
-    shvm::dialect::setup_mlir();
-    panic!()
-}
-
-#[test]
 //credit: edgl
-fn example_fnsimple() {
-    let context = shvm::dialect::setup_mlir();
+fn melior_example_simple() {
+    let context = load_builtin_dialects();
     // A location is a debug location like in LLVM, in MLIR all
     // operations need a location, even if its "unknown".
     let location = Location::unknown(&context);
