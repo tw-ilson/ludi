@@ -44,6 +44,9 @@ pub enum Token {
     STAR_EQUAL,
     SLASH_EQUAL,
 
+    IF,
+    ELSEIF, 
+    ELSE,
     FN,
     IN,
     LET,

@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 ambassador = "0.4.1"
+anyhow = { version = "1.0.89", features = ["backtrace"] }
 derive_more = {version = "1.0.0", features = ["display"]}
 itertools = "0.13.0"
 libludi = {path = "../libludi/"}

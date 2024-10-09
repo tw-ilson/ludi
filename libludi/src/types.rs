@@ -95,18 +95,22 @@ pub enum AtomicDataType {
 // define primitives
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum PrimitiveFuncType {
+    // arithmetic
     Add,
     Sub,
     Mul,
     Div,
-    And,
-    Or,
-    Not,
     IntToFloat,
     FloatToInt,
     IntToBool,
     BoolToInt,
-    Equal,
+
+    //logical
+    If,
+    Or,
+    And,
+    Not,
+    Eq,
     Ne,
     Gt,
     GtEq,
@@ -116,6 +120,8 @@ pub enum PrimitiveFuncType {
     Inv,
     Mod,
 
+    // array
+    Reshape,
     Reduce,
     Scan,
     Fold,
@@ -125,15 +131,8 @@ pub enum PrimitiveFuncType {
     Append,
     Rotate,
     Iota,
-    ContiguousSubArray,
+    Slice,
     Scatter,
-    If,
-    LibFun {
-        name: String,
-        libName: String,
-        arg_types: Vec<Array>,
-        ret_type: Array,
-    },
 }
 
 impl Type {
@@ -187,33 +186,23 @@ impl Display for Type {
     }
 }
 
-impl TryFrom<TokenData> for PrimitiveFuncType {
+impl TryFrom<&str> for PrimitiveFuncType {
     type Error = crate::err::Error;
-    fn try_from(value: TokenData) -> crate::err::Result<Self> {
+    fn try_from(value: &str) -> crate::err::Result<Self> {
         use crate::token::Token;
-        match value.token {
-            Token::PLUS => Ok(PrimitiveFuncType::Add),
-            Token::MINUS => Ok(PrimitiveFuncType::Sub),
-            Token::STAR => Ok(PrimitiveFuncType::Mul),
-            Token::SLASH => Ok(PrimitiveFuncType::Div),
-            Token::PERCENT => Ok(PrimitiveFuncType::Mod),
-            Token::AND => Ok(PrimitiveFuncType::And),
-            Token::OR => Ok(PrimitiveFuncType::Or),
-            Token::EQUAL_EQUAL => Ok(PrimitiveFuncType::Equal),
-            Token::LESS => Ok(PrimitiveFuncType::Lt),
-            Token::LESS_EQUAL => Ok(PrimitiveFuncType::LtEq),
-            Token::GREATER => Ok(PrimitiveFuncType::Gt),
-            Token::GREATER_EQUAL => Ok(PrimitiveFuncType::GtEq),
-            Token::BANG_EQUAL => Ok(PrimitiveFuncType::Ne),
-            Token::IDENTIFIER(name) => match &*name {
-                "scan" => Ok(PrimitiveFuncType::Scan),
-                "fold" => Ok(PrimitiveFuncType::Fold),
-                "trace" => Ok(PrimitiveFuncType::Trace),
-                "reduce" => Ok(PrimitiveFuncType::Reduce),
-                "filter" => Ok(PrimitiveFuncType::Filter),
-                "append" => Ok(PrimitiveFuncType::Append),
-                _ => Err(Error::parse_err("tried to parse a primitive function")),
-            },
+        match value {
+            "reshape" => Ok(Self::Reshape),
+            "reduce" => Ok(Self::Reduce),
+            "scan" => Ok(Self::Scan),
+            "fold" => Ok(Self::Fold),
+            "trace" => Ok(Self::Trace),
+            "reverse" => Ok(Self::Reverse),
+            "filter" => Ok(Self::Filter),
+            "append" => Ok(Self::Append),
+            "rotate" => Ok(Self::Rotate),
+            "iota" => Ok(Self::Iota),
+            "slice" => Ok(Self::Slice),
+            "scatter" => Ok(Self::Scatter),
             _ => Err(Error::parse_err("tried to parse a primitive function")),
         }
     }

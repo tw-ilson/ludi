@@ -110,8 +110,9 @@ pub use ast;
 //      }
 ast! {
     Stmt {
-          ExprStmt { expression: Expr }
-        | PrintStmt { expression: Expr }
+          Expr { expression: Expr }
+        | Print { expression: Expr }
+        | Unit {}
     }
     Expr {
           FnDef { signature: CallSignature, body:Expr }

@@ -1,32 +1,28 @@
-
-use libludi::shape::ambassador_impl_ArrayProps;
-use libludi::shape::ambassador_impl_ShapeOps;
-use libludi::shape::{Shape, ArrayProps, ShapeOps};
+use crate::datatypes::ArrayType;
 use libludi::ast::FrameNode;
 use libludi::err::{Error, LudiError, Result};
+use libludi::shape::ambassador_impl_ArrayProps;
+use libludi::shape::ambassador_impl_ShapeOps;
+use libludi::shape::{ArrayProps, Shape, ShapeOps};
 use std::fmt::Display;
 use std::mem::Discriminant;
 use std::ops::Index;
-use crate::datatypes::ArrayType;
 
 // use crate::data::{OptionalTypeSignature, TypeSignature};
 
 // Row-major Array
 #[derive(ambassador::Delegate, Clone, Hash, Debug, PartialEq, Eq)]
 #[delegate(ArrayProps, target = "shape")]
+#[delegate(ShapeOps, target = "shape")]
 #[repr(C)]
 pub struct Array<T> {
     pub shape: Shape,
     pub data: Vec<T>,
 }
 
-
-impl<T> ShapeOps for Array<T> {
-    fn reshape(&mut self, newshape: &[usize]) -> Result<()> {
-        self.shape.reshape(newshape);
-        Ok(())
-    }
-}
+// impl<T> FrameView<'_, T> {
+//     fn get(idx: &[usize])
+// }
 
 impl<T: Clone> Array<T> {
     pub fn new(shape: &[usize], data: &[T]) -> Self {
@@ -52,15 +48,68 @@ impl<T: Clone> Array<T> {
             None
         } else {
             self.data.get(
-                (1..=self.rank())
+                (0..self.rank())
                     .rev()
                     .scan(1, |acc, i| {
-                        let res = *acc * idxs[i - 1];
-                        *acc = self.shape[i - 1];
+                        let res = *acc * idxs[i];
+                        *acc = self.shape[i];
                         Some(res)
                     })
                     .sum::<usize>(),
             )
+        }
+    }
+    pub fn flat_view<'a>(&'a self, frame_shape: &[usize]) -> Option<FlatFrameView<'a, T>> {
+        if frame_shape.len() > self.rank() {
+            None
+        } else {
+            if self.shape_slice()[..frame_shape.len()] != *frame_shape {
+                None
+            } else {
+                Some(FlatFrameView {
+                    idx: 0,
+                    shape: Shape::new(frame_shape),
+                    item_shape: Shape::new(&self.shape_slice()[frame_shape.len()..]),
+                    buffer: self.data(),
+                })
+            }
+        }
+    }
+    pub fn get_subarray(&self, idxs: &[usize], shape: &Shape) -> Option<&[T]> {
+        if idxs.len() > self.rank() {
+            None
+        } else {
+            let start_ptr = (0..self.rank())
+                .rev()
+                .scan(1, |acc, i| {
+                    let res = *acc * idxs[i];
+                    *acc = self.shape[i];
+                    Some(res)
+                })
+                .sum::<usize>();
+            self.data.get(start_ptr..start_ptr + shape.volume())
+        }
+    }
+}
+
+pub struct FlatFrameView<'a, T> {
+    idx: usize,
+    shape: Shape,
+    item_shape: Shape,
+    buffer: &'a [T],
+}
+
+impl<'a, T> Iterator for FlatFrameView<'a, T> {
+    type Item = &'a [T];
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.shape.volume() {
+            None
+        } else {
+            let item = self
+                .buffer
+                .get((self.idx * self.item_shape.volume())..((self.idx + 1) * self.item_shape.volume()));
+            self.idx += 1;
+            return item;
         }
     }
 }
@@ -73,10 +122,50 @@ impl<A> FromIterator<A> for Array<A> {
     }
 }
 
+impl<A> IntoIterator for Array<A> {
+    type Item = A;
+    type IntoIter = std::vec::IntoIter<A>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
+    }
+}
+impl TryInto<Shape> for Array<isize> {
+    type Error = Error;
+    fn try_into(self) -> Result<Shape> {
+        if self.rank() != 1 {
+            Err(anyhow::anyhow!(
+                "Non-vector array shape: rank={}",
+                self.rank()
+            ))
+        } else {
+            Ok(self
+                .data()
+                .iter()
+                .map(|i| usize::try_from(*i))
+                .process_results(|iter| iter.collect::<Shape>())?)
+        }
+    }
+}
+
+impl TryInto<Shape> for Array<usize> {
+    type Error = Error;
+    fn try_into(self) -> Result<Shape> {
+        if self.rank() != 1 {
+            Err(anyhow::anyhow!(
+                "Non-vector array shape: rank={}",
+                self.rank()
+            ))
+        } else {
+            Ok(Shape::new(self.data()))
+        }
+    }
+}
+
 pub trait MapAxis<T> {}
 
 pub trait Iota {
     fn iota(n: usize) -> Self;
+    // fn iota_range(s:isize, e:isize) -> Self;
 }
 
 macro_rules! iota_impl {
@@ -86,14 +175,20 @@ macro_rules! iota_impl {
             fn iota(n: usize) -> Self {
                 Array {
                     shape: Shape::new(&[n]),
-                    data: (0..n as $prim).collect()
+                    data: (1..=n as $prim).collect()
                 }
             }
+            // fn iota_range(s: isize, e:isize) -> Self {
+            //     Array {
+            //         shape: Shape::new(&[n]),
+            //         data: (s..e as $prim).collect()
+            //     }
+            // }
         }
     )*
     };
 }
-iota_impl!(i8, i16, i32, u8, u16, u32);
+iota_impl!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
 
 use itertools::Itertools;
 macro_rules! frame_impl {
@@ -127,6 +222,7 @@ impl FromIterator<ArrayType> for Result<ArrayType> {
 
 frame_impl! {
     Int
+    Index
     Float
     Complex
     Character
@@ -147,7 +243,7 @@ impl<T: Display> Display for Array<T> {
                         format!("{} ", data_slice[i])
                     } else {
                         format!(
-                            "\n{}",
+                            "\n    {}",
                             fmt_help(
                                 &data_slice[(shape_remaining[1..].iter().product::<usize>() * i)..],
                                 &shape_remaining[1..],
@@ -159,7 +255,6 @@ impl<T: Display> Display for Array<T> {
             // format!("{}{}", s, r)
             r
         }
-        write!(f, "{}", fmt_help(&self.data, self.shape.shape_slice()))
+        write!(f, "{}", fmt_help(&self.data, self.shape.shape_slice()).trim_start())
     }
 }
-

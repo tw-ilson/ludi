@@ -31,6 +31,7 @@ pub trait Data // BinaryOp +
 pub enum DataType {
     Array(ArrayType),
     Atomic(AtomicType),
+    Unit
 }
 impl Data for DataType {}
 
@@ -41,6 +42,7 @@ pub struct BoxType(Box<DataType>);
 pub enum AtomicType {
     // Numeric
     Int(isize),
+    Index(usize),
     Float(f64),
     Complex(num::Complex<f64>),
 
@@ -62,6 +64,7 @@ pub enum AtomicType {
 pub enum ArrayType {
     // Numbers
     Int(Array<isize>),
+    Index(Array<usize>),
     Float(Array<f64>),
     Complex(Array<num::Complex<f64>>),
 
@@ -131,6 +134,7 @@ impl FromIterator<DataType> for Result<DataType> {
                         }
                     })
                     .collect::<Result<Result<ArrayType>>>()??,
+                Some(DataType::Unit) => return Ok(DataType::Unit),
                 None => Err(Error::runtime_err("Frame error: empty frame"))?,
             }
         }))
@@ -230,11 +234,12 @@ impl ArrayType {
     fn signature(&self) -> TypeSignature {
         use DataTypeTag::*;
         match self {
-            Self::Int(_) => TypeSignature(Int64, self.shape()),
-            Self::Float(_) => TypeSignature(Float64, self.shape()),
-            Self::Complex(_) => TypeSignature(Complex, self.shape()),
-            Self::Character(_) => TypeSignature(Character, self.shape()),
-            Self::Boolean(_) => TypeSignature(Boolean, self.shape()),
+            Self::Int(_) => TypeSignature(Int64, self.shape().clone()),
+            Self::Index(_) => TypeSignature(UInt64, self.shape().clone()),
+            Self::Float(_) => TypeSignature(Float64, self.shape().clone()),
+            Self::Complex(_) => TypeSignature(Complex, self.shape().clone()),
+            Self::Character(_) => TypeSignature(Character, self.shape().clone()),
+            Self::Boolean(_) => TypeSignature(Boolean, self.shape().clone()),
             Self::Box(_) => todo!(),
             Self::Fn(_) => todo!(),
         }
@@ -255,6 +260,7 @@ impl AtomicType {
     pub fn upgrade(self) -> ArrayType {
         match self {
             Self::Int(x) => ArrayType::Int(Array::scaler(x)),
+            Self::Index(x) => ArrayType::Index(Array::scaler(x)),
             Self::Float(x) => ArrayType::Float(Array::scaler(x)),
             Self::Complex(x) => ArrayType::Complex(Array::scaler(x)),
             Self::Character(c) => ArrayType::Character(Array::scaler(c)),

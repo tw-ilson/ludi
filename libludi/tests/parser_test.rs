@@ -90,7 +90,7 @@ fn scan_string_literal() {
 }
 
 #[test]
-fn parse_let() -> anyhow::Result<()> {
+fn let_basic() -> anyhow::Result<()> {
     let expr = expression(&mut lex("let a = 10;"))?;
     assert_eq!(
         expr,
@@ -107,7 +107,7 @@ fn parse_let() -> anyhow::Result<()> {
 }
 
 #[test]
-fn parse_let_with_body() -> anyhow::Result<()> {
+fn let_with_body() -> anyhow::Result<()> {
     let expr = expression(&mut lex("let a = 2 in a+2"))?;
     assert_eq!(
         expr,
@@ -270,11 +270,13 @@ fn scan_stmts() {
 
 #[test]
 fn binary_expr1() -> anyhow::Result<()> {
-    let src = "5<3";
+    use itertools::Itertools;
+    let src = "5 < 3";
+    dbg!(lex(src).into_iter().collect_vec());
     let s: Expr = expression(&mut lex(src))?;
     let s_test = Expr::FnCall(
         FnCallNode {
-            callee: Callee::Primitive(PrimitiveFuncType::Gt),
+            callee: Callee::Primitive(PrimitiveFuncType::Lt),
             args: vec![atom_int("5"), atom_int("3")],
         }
         .into(),
@@ -359,7 +361,7 @@ fn test_binary_operation() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_fndef() -> anyhow::Result<()> {
+fn lambda_expr() -> anyhow::Result<()> {
     use std::str::FromStr;
     let prg = expression(&mut lex("|a[3] b[3]|  -> [3] { a + b }"))?;
     assert_eq!(
@@ -406,7 +408,7 @@ fn test_fndef() -> anyhow::Result<()> {
     Ok(())
 }
 #[test]
-fn test_fndef_complex_body() -> anyhow::Result<()> {
+fn fndef_complex_body() -> anyhow::Result<()> {
     use std::str::FromStr;
     let prg = expression(&mut lex("fn foo(x[5] y[5]) -> [5] { (x + y) * 2 }"))?;
     assert_eq!(
@@ -478,7 +480,7 @@ fn test_fndef_complex_body() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_fncall() -> anyhow::Result<()> {
+fn fncall() -> anyhow::Result<()> {
     use std::str::FromStr;
     let prg = expression(&mut lex("foo(1, 2)"))?;
     assert_eq!(
@@ -518,7 +520,7 @@ fn test_fncall() -> anyhow::Result<()> {
     Ok(())
 }
 #[test]
-fn test_nested_fncall() -> anyhow::Result<()> {
+fn nested_fncall() -> anyhow::Result<()> {
     use std::str::FromStr;
     let prg = expression(&mut lex("foo(bar(1), baz(2))"))?;
     assert_eq!(
@@ -581,7 +583,7 @@ fn test_nested_fncall() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_parse_array1() -> anyhow::Result<()> {
+fn parse_array1() -> anyhow::Result<()> {
     let mut tokens = lex("[ 1 2 3 2 1 ]");
     let expr = expression(&mut tokens)?;
 
@@ -599,7 +601,7 @@ fn test_parse_array1() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_frame1() -> anyhow::Result<()> {
+fn frame1() -> anyhow::Result<()> {
     let expr = expression(&mut lex("let a = 1; let b = 2; [ a b ]"))?;
     assert_eq!(
         expr,
@@ -735,6 +737,56 @@ fn diff_square() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn condition1() -> anyhow::Result<()> {
+    let expr = expression(&mut lex("if a>b { a } else { b }"))?;
+    assert_eq!(
+        expr,
+        fn_call_node(
+            Callee::Primitive(PrimitiveFuncType::If),
+            vec![
+                fn_call_node(
+                    Callee::Primitive(PrimitiveFuncType::Gt),
+                    vec![term_node(Name::from("a")), term_node(Name::from("b"))]
+                ),
+                term_node(Name::from("a")),
+                term_node(Name::from("b"))
+            ]
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn condition2() -> anyhow::Result<()> {
+    let expr = expression(&mut lex("if a>b {a} else { if b>c {b} else {c} }"))?;
+    assert_eq!(
+        expr,
+        fn_call_node(
+            Callee::Primitive(PrimitiveFuncType::If),
+            vec![
+                fn_call_node(
+                    Callee::Primitive(PrimitiveFuncType::Gt),
+                    vec![term_node(Name::from("a")), term_node(Name::from("b"))]
+                ),
+                term_node(Name::from("a")),
+                fn_call_node(
+                    Callee::Primitive(PrimitiveFuncType::If),
+                    vec![
+                        fn_call_node(
+                            Callee::Primitive(PrimitiveFuncType::Gt),
+                            vec![term_node(Name::from("b")), term_node(Name::from("c"))]
+                        ),
+                        term_node(Name::from("b")),
+                        term_node(Name::from("c"))
+                    ]
+                )
+            ]
+        )
+    );
+    Ok(())
+}
+
 // #[test]
 // fn test_parse_array2() -> anyhow::Result<()> {
 //     let mut tokens = lex("1_2_3_2_1");
@@ -744,5 +796,11 @@ fn diff_square() -> anyhow::Result<()> {
 //         expr,
 //         array_literal_node(vec![atom_int("1"), atom_int("2"), atom_int("3"), atom_int("2"), atom_int("1")])
 //     );
+//     Ok(())
+// }
+
+// #[test]
+// fn trailing_junk_tokens() -> anyhow::Result<()> {
+//     expression(&mut lex("1+1 junk+_/=")).expect_err("Uncaught junk at end of file");
 //     Ok(())
 // }

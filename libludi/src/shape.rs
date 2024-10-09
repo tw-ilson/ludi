@@ -11,9 +11,9 @@ pub struct Shape {
 #[ambassador::delegatable_trait]
 pub trait ArrayProps {
     fn shape_slice(&self) -> &[usize];
-    fn shape(&self) -> Shape;
+    fn shape(&self) -> &Shape;
     fn rank(&self) -> usize;
-    fn cardinality(&self) -> usize;
+    fn volume(&self) -> usize;
 }
 
 #[ambassador::delegatable_trait]
@@ -25,14 +25,14 @@ impl ArrayProps for Shape {
     fn shape_slice(&self) -> &[usize] {
         &self.s
     }
-    fn shape(&self) -> Shape {
-        self.clone()
+    fn shape(&self) -> &Shape {
+        &self
     }
     fn rank(&self) -> usize {
         self.s.len()
     }
-    fn cardinality(&self) -> usize {
-        self.s.iter().sum()
+    fn volume(&self) -> usize {
+        self.s.iter().product()
     }
 }
 
@@ -54,6 +54,17 @@ impl Shape {
             s: self.s.into_iter().chain(other.s.into_iter()).collect(),
         }
     }
+
+    // checks if the other shape is a valid subshape of this
+    // ex: [2 1] <= [2 2 1], but [2 1] !<= [2 1 1]
+    pub fn subshape_fit(&self, other: &Self) -> Option<&[usize]> {
+            if let Some(rank_diff) = self.rank().checked_sub(other.rank()) {
+                if &self.shape_slice()[rank_diff..] == other.shape_slice() {
+                    return Some(&self.shape_slice()[..rank_diff])
+                } 
+            }
+            None
+    }
 }
 
 impl std::ops::Index<usize> for Shape {
@@ -68,6 +79,11 @@ impl From<ShapeVec> for Shape {
         Self { s: value }
     }
 }
-pub struct SmallVecDeque {
 
+impl FromIterator<usize> for Shape {
+    fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
+        Shape{ 
+            s: iter.into_iter().collect()
+        }
+    }
 }

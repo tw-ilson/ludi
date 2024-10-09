@@ -9,9 +9,9 @@ use libludi::ast::ParseTree;
 use libludi::ast::Stmt;
 use libludi::env::{Env, EnvRef};
 use libludi::err::{Error, Result};
-use libludi::parser::{statement, expression};
-use libludi::parser::Parser;
 use libludi::lex::lex;
+use libludi::parser::Parser;
+use libludi::parser::{expression, statement};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
@@ -63,15 +63,17 @@ pub fn run(source: &str, e: &mut DynamicEnv) -> Result<LudiExit> {
             println!("{:?}", t.token);
         })
     };
-    let p: Stmt = statement(&mut tokens).unwrap();
-    // for stmt in p {
-        if dump_ast {
-            println!("{:#?}", &p);
+    match statement(&mut tokens) {
+        Ok(p) => {
+            if dump_ast {
+                println!("{:#?}", &p);
+            }
+            if let Err(e) = p.interpret(e) {
+                println!("{}", e);
+            }
         }
-        if let Err(e) = p.interpret(e) {
-            println!("{}", e);
-        }
-    // }
+        Err(e) => println!("{}", e),
+    }
     Ok(LudiExit::Success)
 }
 

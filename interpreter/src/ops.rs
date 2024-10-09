@@ -5,12 +5,11 @@
 use crate::array::Array;
 use libludi::shape::ArrayProps;
 // use crate::atomic::{AtomicType};
-use crate::datatypes::{Data, DataType, AtomicType, ArrayType};
-use libludi::err::{Error, LudiError, Result};
+use crate::datatypes::{ArrayType, AtomicType, Data, DataType};
 use itertools::izip;
+use libludi::err::{Error, LudiError, Result};
 use num::complex::ComplexFloat;
 use num::Complex;
-
 
 // Unary Ops
 pub trait Neg {
@@ -50,11 +49,28 @@ pub trait Div {
     where
         Self: Sized;
 }
-pub trait UnaryOp: Neg + Inv {}
+pub trait UnaryOp: Neg {}
 pub trait BinaryOp: Add + Sub + Mul + Div {}
 
 impl BinaryOp for DataType {}
-// impl UnaryOp for DataType {}
+impl UnaryOp for DataType {}
+
+macro_rules! delegate_binops_data {
+    ($($trait:ident $fname:ident),*) => {
+        $(
+            impl $trait for DataType {
+                fn $fname(self) -> Result<Self> {
+                    match self {
+                        DataType::Array(a) => Ok(DataType::Array(a.$fname()?)),
+                        DataType::Atomic(a) => Ok(DataType::Atomic(a.$fname()?)),
+                        DataType::Unit => Err(Error::runtime_err("operating on unit type is not allowed"))
+                    }
+                }
+            }
+        )*
+    };
+}
+delegate_binops_data!(Neg neg);
 
 macro_rules! delegate_binops_data {
     ($($trait:ident $fname:ident),*) => {
@@ -82,6 +98,7 @@ macro_rules! delegate_binops_arraytype {
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
                     match (self,rhs) {
                         (ArrayType::Int(a), ArrayType::Int(b))  => Ok(ArrayType::Int(a.$fname(b)?)),
+                        (ArrayType::Index(a), ArrayType::Index(b))  => Ok(ArrayType::Index(a.$fname(b)?)),
                         (ArrayType::Float(a), ArrayType::Float(b))  => Ok(ArrayType::Float(a.$fname(b)?)),
                         (ArrayType::Complex(a), ArrayType::Complex(b))  => Ok(ArrayType::Complex(a.$fname(b)?)),
                         _ => {unimplemented!()}
@@ -99,33 +116,23 @@ delegate_binops_arraytype!(
     Div div
 );
 
-// macro_rules! delegate_unops_arraytype {
-//     ($($trait:ident $fname:ident),*) => {
-//         $(
-//             impl $trait for ArrayType {
-//                 fn $fname(self) -> Result<Self>{
-//                     match self {
-//                         ArrayType::UInt8(a)  => Ok(ArrayType::UInt8(a.$fname()?)),
-//                         ArrayType::Int8(a)   => Ok(ArrayType::Int8(a.$fname()?)),
-//                         ArrayType::UInt16(a) => Ok(ArrayType::UInt16(a.$fname()?)),
-//                         ArrayType::Int16(a)  => Ok(ArrayType::Int16(a.$fname()?)),
-//                         ArrayType::UInt32(a) => Ok(ArrayType::UInt32(a.$fname()?)),
-//                         ArrayType::Int32(a)  => Ok(ArrayType::Int32(a.$fname()?)),
-//                         ArrayType::UInt64(a) => Ok(ArrayType::UInt64(a.$fname()?)),
-//                         ArrayType::Int64(a)  => Ok(ArrayType::Int64(a.$fname()?)),
-//                         ArrayType::BFloat16(a) => Ok(ArrayType::BFloat16(a.$fname()?)),
-//                         ArrayType::Float16(a)  => Ok(ArrayType::Float16(a.$fname()?)),
-//                         ArrayType::Float32(a) => Ok(ArrayType::Float32(a.$fname()?)),
-//                         ArrayType::Float64(a)  => Ok(ArrayType::Float64(a.$fname()?)),
-//                         ArrayType::Complex(a)  => Ok(ArrayType::Complex(a.$fname()?)),
-//                         _ => {unimplemented!()}
-//                     }
-//                 }
-//             }
-//         )*
-//     };
-// }
-// delegate_unops_arraytype!(Neg neg);
+macro_rules! delegate_unops_arraytype {
+    ($($trait:ident $fname:ident),*) => {
+        $(
+            impl $trait for ArrayType {
+                fn $fname(self) -> Result<Self>{
+                    match self {
+                        ArrayType::Int(a)  => Ok(ArrayType::Int(a.$fname()?)),
+                        ArrayType::Float(a)  => Ok(ArrayType::Float(a.$fname()?)),
+                        // ArrayType::Complex(a)  => Ok(ArrayType::Complex(a.$fname()?)),
+                        _ => {unimplemented!()}
+                    }
+                }
+            }
+        )*
+    };
+}
+delegate_unops_arraytype!(Neg neg);
 
 macro_rules! delegate_binops_numbertype {
     ($($trait:ident $fname:ident),*) => {
@@ -135,9 +142,10 @@ macro_rules! delegate_binops_numbertype {
                 fn $fname(self, rhs: Self::Rhs) -> Result<Self>{
                     match (self,rhs) {
                         (AtomicType::Int(a), AtomicType::Int(b))  => Ok(AtomicType::Int(a.$fname(b)?)),
+                        (AtomicType::Index(a), AtomicType::Index(b))  => Ok(AtomicType::Index(a.$fname(b)?)),
                         (AtomicType::Float(a), AtomicType::Float(b))  => Ok(AtomicType::Float(a.$fname(b)?)),
                         (AtomicType::Complex(a), AtomicType::Complex(b))  => Ok(AtomicType::Complex(a.$fname(b)?)),
-                        _ => {unimplemented!()}
+                        _ => {Err(Error::msg(format!("incompatible types for {}", stringify!($fname))))}
                     }
                 }
             }
@@ -152,6 +160,39 @@ delegate_binops_numbertype!(
     Div div
 );
 
+// impl<T> Add for Array<T>
+// where
+//     T: Copy + Add<Rhs = T>,
+// {
+//     type Rhs = Self;
+//     fn add(self, rhs: Self) -> Result<Self> {
+//         // if self.shape() != rhs.shape() {
+//         //     return Err(Error::msg("shape error"))
+//         // }
+//
+//         match self.shape().subshape_fit(rhs.shape()) {
+//             Some(&[]) => Ok(Array::new(
+//                 self.shape_slice(),
+//                 &izip!(self.data(), rhs.data())
+//                     .map_while(|(a, b)| a.add(*b).ok())
+//                     .collect::<Vec<T>>(),
+//             )),
+//             Some(shape_diff) => Ok(Array::new(self.shape_slice(), {
+//                 let flat_view = self.flat_view(shape_diff).expect("shape error");
+//                 &flat_view
+//                     .into_iter()
+//                     .flat_map(|subarray| {
+//                         subarray.iter().zip(rhs.data()).map_while(|(a, b)| a.add(*b).ok())
+//                     })
+//                     .collect::<Vec<T>>()
+//             })),
+//             None => match rhs.shape().subshape_fit(self.shape()) {
+//                 Some(_) => todo!(),
+//                 None => return Err(Error::msg("shape error")),
+//             },
+//         }
+//     }
+// }
 macro_rules! delegate_binops_std_array {
     ($($trait:ident $fname:ident),*) => {
         $(
@@ -161,15 +202,42 @@ macro_rules! delegate_binops_std_array {
         {
             type Rhs = Self;
             fn $fname(self, rhs: Self) -> Result<Self> {
-                if self.shape() != rhs.shape() {
-                    return Err(Error::msg("shape error"))
+                // if self.shape() != rhs.shape() {
+                //     return Err(Error::msg("shape error"))
+                // }
+
+                match self.shape().subshape_fit(rhs.shape()) {
+                    Some(&[]) => Ok(Array::new(
+                        self.shape_slice(),
+                        &izip!(self.data(), rhs.data())
+                            .map_while(|(a, b)| a.$fname(*b).ok())
+                            .collect::<Vec<T>>(),
+                    )),
+                    Some(shape_diff) =>
+                        Ok(Array::new(
+                                self.shape_slice(),
+                                {
+                                    let flat_view = self.flat_view(shape_diff).expect("shape error");
+                                    &flat_view.into_iter().flat_map(|subarray| {
+                                        subarray.iter().zip(rhs.data()).map_while(|(a, b)| a.$fname(*b).ok())
+                                    }).collect::<Vec<T>>()
+                                }
+                                )
+                            ),
+                    None => match rhs.shape().subshape_fit(self.shape()) {
+                        Some(shape_diff) =>
+                            Ok(Array::new(
+                                    rhs.shape_slice(),
+                                    {
+                                        let flat_view = rhs.flat_view(shape_diff).expect("shape error");
+                                        &flat_view.into_iter().flat_map(|subarray| {
+                                            subarray.iter().zip(self.data()).map_while(|(a, b)| a.$fname(*b).ok())
+                                        }).collect::<Vec<T>>()
+                                    }
+                                    )
+                                ),
+                        None => return Err(Error::msg("shape error"))},
                 }
-                Ok(Array::new(
-                    self.shape_slice(),
-                    &izip!(self.data(), rhs.data())
-                        .map_while(|(a, b)| a.$fname(*b).ok())
-                        .collect::<Vec<T>>(),
-                ))
             }
         }
         )*
@@ -226,14 +294,25 @@ impl<T> Inv for T {
 }
 
 impl Neg for AtomicType {
-    fn neg(self) -> Result<Self> where Self: Sized {
+    fn neg(self) -> Result<Self>
+    where
+        Self: Sized,
+    {
         use AtomicType::*;
         Ok(match self {
-            Int(a) => Int(-a),
+            Int(a) => Int(a),
             Float(a) => Float(-a),
-            Complex(a) => Complex(num::Complex::new(-a.re(), a.im())), //subtracts the real
+            // Complex(a) => Complex(num::Complex::new(-a.re(), a.im())), //subtracts the real
             _ => return Err(Error::msg("unsupported op")),
         })
     }
 }
 
+impl<T> Neg for T
+where
+    T: std::ops::Neg<Output = T>,
+{
+    fn neg(self) -> Result<Self> {
+        Ok(-self)
+    }
+}

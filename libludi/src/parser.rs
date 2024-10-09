@@ -4,7 +4,7 @@ use crate::{
     ast::*,
     atomic::Literal,
     env::Name,
-    err::{Error, LudiError,  Result},
+    err::{Error, LudiError, Result},
     lex::{lex, Lexer},
     shape::{Shape, ShapeVec},
     token::{Location, Token, TokenData},
@@ -35,7 +35,7 @@ macro_rules! parse_failure {
                     token: EOF,
                     loc: Location { line: 0 },
                 },
-                "reached end of file unexpectedly!"
+                $msg,
             )
         }
     };
@@ -60,28 +60,62 @@ macro_rules! expect_next {
 }
 
 pub fn statement(tokens: &mut Lexer) -> Result<Stmt> {
-    if match_next!(tokens, PRINT).is_some() {
-        Ok(Stmt::PrintStmt(
-            PrintStmtNode {
-                expression: expression(tokens)?,
-            }
-            .into(),
-        ))
-    // } else if match_next!(tokens, OPEN_BRACE).is_some() {
-    //     block(tokens)
+    if tokens.peek().is_some() {
+        if match_next!(tokens, PRINT).is_some() {
+            Ok(Stmt::Print({
+                let expression = expression(tokens)?;
+                expect_next!(tokens, SEMICOLON)?;
+                PrintNode { expression }.into()
+            }))
+        // } else if match_next!(tokens, OPEN_BRACE).is_some() {
+        //     block(tokens)
+        } else {
+            Ok(Stmt::Expr(
+                ExprNode {
+                    expression: expression(tokens)?,
+                }
+                .into(),
+            ))
+        }
     } else {
-        Ok(Stmt::ExprStmt(
-            ExprStmtNode {
-                expression: expression(tokens)?,
-            }
-            .into(),
-        ))
+        Ok(unit_node())
     }
-    // match_next!(tokens, SEMICOLON).expect("expected semicolon")
 }
 
 pub fn expression(tokens: &mut Lexer) -> Result<Expr> {
     fndef(tokens)
+}
+
+fn fndef(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, FN).is_some() {
+        let name: Name = expect_next!(tokens, IDENTIFIER(_))?.try_into()?;
+        expect_next!(tokens, OPEN_PAREN)?;
+        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
+            .map_while(|_| {
+                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
+                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
+                        Ok((name.try_into()?, typesignature(tokens)?))
+                    })())
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
+        expect_next!(tokens, CLOSE_PAREN)?;
+        expect_next!(tokens, ARROW)?;
+        let ret = typesignature(tokens)?;
+        expect_next!(tokens, OPEN_BRACE)?;
+        let body = expression(tokens)?;
+        expect_next!(tokens, CLOSE_BRACE)?;
+
+        Ok(let_node(
+            name,
+            fn_def_node(CallSignature { args, ret }, body),
+            expression(tokens).ok(),
+        ))
+    } else {
+        letexpr(tokens)
+    }
 }
 
 fn letexpr(tokens: &mut Lexer) -> Result<Expr> {
@@ -141,39 +175,26 @@ fn lambda(tokens: &mut Lexer) -> Result<Expr> {
             .into(),
         ))
     } else {
-        equality(tokens) 
+        conditional(tokens)
     }
 }
 
-fn fndef(tokens: &mut Lexer) -> Result<Expr> {
-    if match_next!(tokens, FN).is_some() {
-        let name: Name = expect_next!(tokens, IDENTIFIER(_))?.try_into()?;
-        expect_next!(tokens, OPEN_PAREN)?;
-        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
-            .map_while(|_| {
-                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
-                        Ok((name.try_into()?, typesignature(tokens)?))
-                    })())
-                } else {
-                    None
-                }
-            })
-            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
-        expect_next!(tokens, CLOSE_PAREN)?;
-        expect_next!(tokens, ARROW)?;
-        let ret = typesignature(tokens)?;
+fn conditional(tokens: &mut Lexer) -> Result<Expr> {
+    if match_next!(tokens, IF).is_some() {
+        let condexpr = expression(tokens)?;
         expect_next!(tokens, OPEN_BRACE)?;
-        let body = expression(tokens)?;
+        let thenexpr = expression(tokens)?;
         expect_next!(tokens, CLOSE_BRACE)?;
-
-        Ok(let_node(
-            name,
-            fn_def_node(CallSignature { args, ret }, body),
-            expression(tokens).ok(),
+        expect_next!(tokens, ELSE)?;
+        expect_next!(tokens, OPEN_BRACE)?;
+        let elexpr = expression(tokens)?;
+        expect_next!(tokens, CLOSE_BRACE)?;
+        Ok(fn_call_node(
+            Callee::Primitive(PrimitiveFuncType::If),
+            vec![condexpr, thenexpr, elexpr],
         ))
     } else {
-        letexpr(tokens)
+        equality(tokens)
     }
 }
 
@@ -187,7 +208,7 @@ fn equality(tokens: &mut Lexer) -> Result<Expr> {
                         expr = Expr::FnCall(
                             FnCallNode {
                                 callee: Callee::Primitive(match operator.token {
-                                    EQUAL_EQUAL => PrimitiveFuncType::Equal,
+                                    EQUAL_EQUAL => PrimitiveFuncType::Eq,
                                     BANG_EQUAL => PrimitiveFuncType::Ne,
                                     _ => unreachable!(),
                                 }),
@@ -218,7 +239,7 @@ fn comparison(tokens: &mut Lexer) -> Result<Expr> {
                                 callee: Callee::Primitive(match operator.token {
                                     GREATER => PrimitiveFuncType::Gt,
                                     GREATER_EQUAL => PrimitiveFuncType::GtEq,
-                                    LESS => PrimitiveFuncType::Gt,
+                                    LESS => PrimitiveFuncType::Lt,
                                     LESS_EQUAL => PrimitiveFuncType::LtEq,
                                     _ => unreachable!(),
                                 }),
@@ -325,7 +346,13 @@ fn fncall(tokens: &mut Lexer) -> Result<Expr> {
         expect_next!(tokens, CLOSE_PAREN)?;
         Ok(Expr::FnCall(
             FnCallNode {
-                callee: Callee::Expression(callee),
+                callee: match callee {
+                    Expr::Term(ref node) => match (&*node.name.name).try_into() {
+                        Ok(prim_ty) => Callee::Primitive(prim_ty),
+                        Err(_) => Callee::Expression(callee)
+                    }
+                    _ => Callee::Expression(callee)
+                },
                 args,
             }
             .into(),
