@@ -29,17 +29,17 @@ where
 
 // given input T_1, T_2 ... T_n where Conversion<T_i+1> for T_i
 // output type: Conversion<T_n> for T_1
-macro_rules! pipeline {
-    (
-        $($source:ident -> $target:ident),*
-        ) => {
-        $(
-            paste::paste! {
-                trait [< $source To $target >] : Transform<$source, $target> {}
-            }
-        )*
-    };
-}
+// macro_rules! pipeline {
+//     (
+//         $($source:ident -> $target:ident),*
+//         ) => {
+//         $(
+//             paste::paste! {
+//                 trait [< $source To $target >] : Transform<$source, $target> {}
+//             }
+//         )*
+//     };
+// }
 
 // pipeline! {
 //     String -> TokenStream, 

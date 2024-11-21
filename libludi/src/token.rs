@@ -1,9 +1,6 @@
 use std::hash::Hash;
-use serde::{Serialize, Deserialize};
 
-use crate::{
-    err::{ErrorKind, Result},
-};
+use crate::err::{ErrorKind, Result};
 
 #[derive(derive_more::Display, Debug, Clone, PartialEq, Eq)]
 pub enum Token {
@@ -65,7 +62,7 @@ pub enum Token {
     EOF, // for throwing errors
 }
 
-#[derive(Serialize, Deserialize, derive_more::Display, Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(derive_more::Display, Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Location {
     pub line: usize,
 }

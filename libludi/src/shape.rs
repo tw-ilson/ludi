@@ -43,11 +43,20 @@ impl ShapeOps for Shape {
     }
 }
 
+impl Default for Shape {
+    fn default() -> Self {
+        Shape::new(&[])
+    }
+}
+
 impl Shape {
     pub fn new(s: &[usize]) -> Shape {
         Shape {
             s: ShapeVec::from_slice(s),
         }
+    }
+    pub fn empty() -> Shape {
+        Self::default()
     }
     pub fn concat(self, other: Self) -> Self {
         Self {

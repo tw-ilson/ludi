@@ -81,6 +81,8 @@ macro_rules! delegate_binops_data {
                     match (self, rhs) {
                         (DataType::Array(a), DataType::Array(b)) => Ok(DataType::Array(a.$fname(b)?)),
                         (DataType::Atomic(a), DataType::Atomic(b)) => Ok(DataType::Atomic(a.$fname(b)?)),
+                        (DataType::Atomic(atom), DataType::Array(array)) => Ok(DataType::Array(array.$fname(atom.into())?)),
+                        (DataType::Array(array), DataType::Atomic(atom)) => Ok(DataType::Array(array.$fname(atom.into())?)),
                         _=> todo!()
                     }
                 }
@@ -160,39 +162,6 @@ delegate_binops_numbertype!(
     Div div
 );
 
-// impl<T> Add for Array<T>
-// where
-//     T: Copy + Add<Rhs = T>,
-// {
-//     type Rhs = Self;
-//     fn add(self, rhs: Self) -> Result<Self> {
-//         // if self.shape() != rhs.shape() {
-//         //     return Err(Error::msg("shape error"))
-//         // }
-//
-//         match self.shape().subshape_fit(rhs.shape()) {
-//             Some(&[]) => Ok(Array::new(
-//                 self.shape_slice(),
-//                 &izip!(self.data(), rhs.data())
-//                     .map_while(|(a, b)| a.add(*b).ok())
-//                     .collect::<Vec<T>>(),
-//             )),
-//             Some(shape_diff) => Ok(Array::new(self.shape_slice(), {
-//                 let flat_view = self.flat_view(shape_diff).expect("shape error");
-//                 &flat_view
-//                     .into_iter()
-//                     .flat_map(|subarray| {
-//                         subarray.iter().zip(rhs.data()).map_while(|(a, b)| a.add(*b).ok())
-//                     })
-//                     .collect::<Vec<T>>()
-//             })),
-//             None => match rhs.shape().subshape_fit(self.shape()) {
-//                 Some(_) => todo!(),
-//                 None => return Err(Error::msg("shape error")),
-//             },
-//         }
-//     }
-// }
 macro_rules! delegate_binops_std_array {
     ($($trait:ident $fname:ident),*) => {
         $(

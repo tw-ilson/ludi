@@ -6,9 +6,9 @@ use crate::{
     env::Name,
     err::{Error, LudiError, Result},
     lex::{lex, Lexer},
-    shape::{Shape, ShapeVec},
+    shape::{ArrayProps, Shape, ShapeVec},
     token::{Location, Token, TokenData},
-    types::{PrimitiveFuncType, Type},
+    types::{Arr, Array, Atom, PrimitiveFuncType, Type},
 };
 
 use anyhow::Context;
@@ -90,27 +90,26 @@ fn fndef(tokens: &mut Lexer) -> Result<Expr> {
     if match_next!(tokens, FN).is_some() {
         let name: Name = expect_next!(tokens, IDENTIFIER(_))?.try_into()?;
         expect_next!(tokens, OPEN_PAREN)?;
-        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
-            .map_while(|_| {
-                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
-                        Ok((name.try_into()?, typesignature(tokens)?))
-                    })())
-                } else {
-                    None
-                }
-            })
-            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
+        let mut args: Vec<Arg> = Vec::new();
+        while let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
+            args.push(Arg(name.try_into()?, typesignature(tokens)?));
+            if !match_next!(tokens, COMMA).is_some() {
+                break;
+            }
+        }
         expect_next!(tokens, CLOSE_PAREN)?;
-        expect_next!(tokens, ARROW)?;
-        let ret = typesignature(tokens)?;
+        let ret = if match_next!(tokens, ARROW).is_some() {
+            vec![typesignature(tokens)?] // TODO: support multiple return args
+        } else {
+            vec![Type::Atom(Atom::Unit)]
+        };
         expect_next!(tokens, OPEN_BRACE)?;
         let body = expression(tokens)?;
         expect_next!(tokens, CLOSE_BRACE)?;
 
         Ok(let_node(
             name,
-            fn_def_node(CallSignature { args, ret }, body),
+            fn_def_node(FuncSignature { args, ret }, body),
             expression(tokens).ok(),
         ))
     } else {
@@ -130,7 +129,8 @@ fn letexpr(tokens: &mut Lexer) -> Result<Expr> {
                     let TokenData { token, loc: _ } = expect_next!(tokens, IN | SEMICOLON)?;
                     match token {
                         IN => Some(expression(tokens)?),
-                        SEMICOLON => expression(tokens).ok(), // instead of doing this, we want to
+                        SEMICOLON => expression(tokens).ok(),
+                        // TODO: instead of doing this, we want to
                         // recover from an immediate EOF, for
                         // the sake of interpreter & tests
                         _ => unreachable!(),
@@ -150,32 +150,67 @@ fn value(tokens: &mut Lexer) -> Result<Expr> {
 
 fn lambda(tokens: &mut Lexer) -> Result<Expr> {
     if match_next!(tokens, VBAR).is_some() {
-        let args: Vec<(Name, OptionalTypeSignature)> = (0..)
-            .map_while(|_| {
-                if let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
-                    Some((|| -> Result<(Name, OptionalTypeSignature)> {
-                        Ok((name.try_into()?, typesignature(tokens)?))
-                    })())
-                } else {
-                    None
-                }
-            })
-            .collect::<Result<Vec<(Name, OptionalTypeSignature)>>>()?;
+        let mut args: Vec<Arg> = Vec::new();
+        while let Some(name) = match_next!(tokens, IDENTIFIER(_)) {
+            args.push(Arg(name.try_into()?, typesignature(tokens)?));
+            if !match_next!(tokens, COMMA).is_some() {
+                break;
+            }
+        }
         expect_next!(tokens, VBAR)?;
-        expect_next!(tokens, ARROW)?;
-        let ret = typesignature(tokens)?;
+        let ret = if match_next!(tokens, ARROW).is_some() {
+            vec![typesignature(tokens)?] // TODO: support multiple return args
+        } else {
+            vec![Type::Atom(Atom::Unit)]
+        };
         expect_next!(tokens, OPEN_BRACE)?;
         let body = expression(tokens)?;
         expect_next!(tokens, CLOSE_BRACE)?;
         Ok(Expr::FnDef(
             FnDefNode {
-                signature: CallSignature { args, ret },
+                signature: FuncSignature { args, ret },
                 body,
             }
             .into(),
         ))
     } else {
         conditional(tokens)
+    }
+}
+
+fn typesignature(tokens: &mut Lexer) -> Result<Type> {
+    if match_next!(tokens, OPEN_BRACKET).is_some() {
+        let element: Atom = match match_next!(tokens, IDENTIFIER(_)) {
+            Some(TokenData {
+                token: IDENTIFIER(t_id),
+                ..
+            }) => Atom::try_from(&*t_id)?,
+            _ => Atom::Unit,
+        };
+        let shape = Shape::from(
+            (0..)
+                .map_while(|_| match match_next!(tokens, INTEGER_LITERAL(_)) {
+                    Some(TokenData {
+                        token: INTEGER_LITERAL(n_str),
+                        ..
+                    }) => Some(
+                        n_str
+                            .parse::<usize>()
+                            .or(Err(Error::parse_err("shape expects an unsigned int"))),
+                    ),
+                    _ => None,
+                })
+                .collect::<Result<Shape>>()?,
+        );
+        let ty = if shape.rank() > 0 {
+            Type::Array(Array::Arr(Arr { element, shape }))
+        } else {
+            Type::Atom(element)
+        };
+        expect_next!(tokens, CLOSE_BRACKET)?;
+        Ok(ty)
+    } else {
+        Ok(Type::Atom(Atom::Unit))
     }
 }
 
@@ -334,67 +369,41 @@ fn unary(tokens: &mut Lexer) -> Result<Expr> {
 }
 
 fn fncall(tokens: &mut Lexer) -> Result<Expr> {
-    let callee = primary(tokens)?;
-    if match_next!(tokens, OPEN_PAREN).is_some() {
-        let mut args = Vec::<Expr>::new();
-        loop {
-            args.push(expression(tokens)?);
-            if match_next!(tokens, COMMA).is_none() {
-                break;
-            }
-        }
-        expect_next!(tokens, CLOSE_PAREN)?;
-        Ok(Expr::FnCall(
-            FnCallNode {
-                callee: match callee {
-                    Expr::Term(ref node) => match (&*node.name.name).try_into() {
-                        Ok(prim_ty) => Callee::Primitive(prim_ty),
-                        Err(_) => Callee::Expression(callee)
+    let mut expr = primary(tokens)?;
+    loop {
+        if match_next!(tokens, OPEN_PAREN).is_some() {
+            expr = {
+                let mut args = Vec::<Expr>::new();
+                if match_next!(tokens, CLOSE_PAREN).is_none() {
+                    loop {
+                        let a = expression(tokens)?;
+                        dbg!(&a);
+                        args.push(a);
+                        if match_next!(tokens, COMMA).is_none() {
+                            break;
+                        }
                     }
-                    _ => Callee::Expression(callee)
-                },
-                args,
-            }
-            .into(),
-        ))
-    } else {
-        Ok(callee)
-    }
-}
-
-fn typesignature(tokens: &mut Lexer) -> Result<OptionalTypeSignature> {
-    if match_next!(tokens, OPEN_BRACKET).is_some() {
-        let t_decl: Option<Type> = if let Some(TokenData {
-            token: IDENTIFIER(t_id),
-            ..
-        }) = match_next!(tokens, IDENTIFIER(_))
-        {
-            // Some(Type::from_str(&t_id)?)
-            //
-            None // ignore this for now while we work out types
+                    expect_next!(tokens, CLOSE_PAREN)?;
+                }
+                Expr::FnCall(
+                    FnCallNode {
+                        callee: match &expr {
+                            Expr::Term(node) => match (&*node.name.name).try_into() {
+                                Ok(prim_ty) => Callee::Primitive(prim_ty),
+                                Err(_) => Callee::Expression(expr),
+                            },
+                            _ => Callee::Expression(expr),
+                        },
+                        args,
+                    }
+                    .into(),
+                )
+            };
         } else {
-            None
-        };
-        let shape = Shape::from(
-            (0..)
-                .map_while(|_| match match_next!(tokens, INTEGER_LITERAL(_)) {
-                    Some(TokenData {
-                        token: INTEGER_LITERAL(n_str),
-                        ..
-                    }) => Some(
-                        n_str
-                            .parse::<usize>()
-                            .or(Err(Error::parse_err("shape expects an unsigned int"))),
-                    ),
-                    _ => None,
-                })
-                .collect::<Result<ShapeVec>>()?,
-        );
-        expect_next!(tokens, CLOSE_BRACKET)?;
-        Ok(OptionalTypeSignature(t_decl, shape))
-    } else {
-        Ok(OptionalTypeSignature(None, Shape::new(&[])))
+            break;
+        }
     }
+    Ok(expr)
 }
 
 fn primary(tokens: &mut Lexer) -> Result<Expr> {

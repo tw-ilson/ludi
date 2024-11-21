@@ -3,12 +3,11 @@ use std::fs::write;
 use std::ops::Deref;
 
 use crate::atomic::Literal;
-use crate::shape::{Shape, ShapeOps, ArrayProps};
-use crate::types::{Type, PrimitiveFuncType};
 use crate::env::Name;
 use crate::err::{Error, ErrorKind, LudiError, Result};
+use crate::shape::{ArrayProps, Shape, ShapeOps};
 use crate::token::TokenData;
-use derive_more::Display;
+use crate::types::{PrimitiveFuncType, Type};
 use itertools::Itertools;
 
 pub type ParseTree = Vec<Expr>;
@@ -98,13 +97,27 @@ macro_rules! define_constructors {
         )+
     };
 }
-
+pub use ast;
 pub use define_constructors;
 pub use define_enum;
-pub use ast;
+
+#[derive(Debug, PartialEq)]
+pub enum Callee {
+    Expression(Expr),
+    Primitive(PrimitiveFuncType),
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Arg(pub Name, pub Type);
+
+#[derive(Debug, Eq, Clone)]
+pub struct FuncSignature {
+    pub args: Vec<Arg>,
+    pub ret: Vec<Type>,
+}
 
 // AST productions for the lang of format:
-// Symbol {
+// meta-symbol {
 //      production { attributes... }
 //      ...
 //      }
@@ -115,107 +128,37 @@ ast! {
         | Unit {}
     }
     Expr {
-          FnDef { signature: CallSignature, body:Expr }
+          FnDef { signature: FuncSignature, body:Expr }
         | FnCall { callee: Callee, args: Vec<Expr> }
         | Frame { expression_list: Vec<Expr> }
         | AtomLiteral { value: Literal }
         | ArrayLiteral { value: Vec<Literal> }
         | Let { name:Name, initializer: Expr, region: Option<Expr> }
         | Term { name: Name }
-        // | AtomicCast {value: Expr }
-        // | ShapeCast {value: Expr }
+        // | Condition 
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Callee  {
-    Expression(Expr),
-    Primitive(PrimitiveFuncType),
-}
-
-// pub fn binary_operation(op: &'static str, left: Expr, right: Expr) -> Expr {
-//     let args = vec![left, right];
-//     match op {
-//     }
-// }
-
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct TypeSignature(pub Type, pub Shape);
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct OptionalTypeSignature(pub Option<Type>, pub Shape);
-
-#[derive(Debug, Eq, Clone)]
-pub struct CallSignature {
-    pub args: Vec<(Name, OptionalTypeSignature)>,
-    pub ret: OptionalTypeSignature,
-}
-
-impl Display for CallSignature {
+impl Display for FuncSignature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (_, t_arg) in &self.args {
-            write!(f, "{}, ", t_arg)?
+        for Arg(_, t) in &self.args {
+            write!(f, "{}, ", t)?;
         }
-        write!(f, "-> {}", self.ret)?;
+        write!(f, " -> ")?;
+        for t in &self.ret {
+            write!(f, "{}, ", t)?;
+        }
         Ok(())
     }
 }
 
-impl PartialEq for CallSignature {
+impl PartialEq for FuncSignature {
     fn eq(&self, other: &Self) -> bool {
         self.args
             .clone()
             .into_iter()
             .zip(other.args.clone())
-            .all(|((_, t1), (_, t2))| t1 == t2)
+            .all(|(Arg(_, t1), Arg(_, t2))| t1 == t2)
             && self.ret == other.ret
     }
 }
-
-
-impl TryFrom<OptionalTypeSignature> for TypeSignature {
-    type Error = Error;
-    fn try_from(value: OptionalTypeSignature) -> Result<Self> {
-        Ok(TypeSignature(
-            value
-                .0
-                .ok_or(Error::compile_err("expected explicit type annotations"))?,
-            value.1,
-        ))
-    }
-}
-
-
-impl std::fmt::Display for TypeSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}{}]",
-            self.0,
-            self.1
-                .shape_slice()
-                .iter()
-                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
-        )
-    }
-}
-
-impl std::fmt::Display for OptionalTypeSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}{}]",
-            if let Some(d) = &self.0 {
-                d.to_string()
-            } else {
-                "".to_string()
-            },
-            self.1
-                .shape_slice()
-                .iter()
-                .fold("".to_string(), |d, acc| format!("{} {}", acc, d))
-        )
-    }
-}
-

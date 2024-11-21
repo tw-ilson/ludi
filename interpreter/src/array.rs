@@ -1,4 +1,4 @@
-use crate::datatypes::ArrayType;
+use crate::datatypes::{ArrayType, AtomicType};
 use libludi::ast::FrameNode;
 use libludi::err::{Error, LudiError, Result};
 use libludi::shape::ambassador_impl_ArrayProps;

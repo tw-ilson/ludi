@@ -1,10 +1,13 @@
-
 use itertools::Itertools;
 use melior::ir::r#type::FunctionType;
+use melior::ir::Location;
 
-use crate::ast::{self, OptionalTypeSignature};
-use crate::err::Result;
+use crate::ast::Arg;
+use crate::err::{Error, LudiError, Result};
 use crate::shape::ArrayProps;
+use crate::types;
+use crate::types::typed_ast;
+use crate::types::GetType;
 
 // an object which contains an MLIR context and produces a module
 pub struct CodeWriter {
@@ -19,7 +22,7 @@ impl CodeWriter {
         CodeWriter { context }
     }
 
-    pub fn write_ast(&self, ast: ast::Expr) -> Result<melior::ir::Module> {
+    pub fn write_ast(&self, ast: typed_ast::TypedExpr) -> Result<melior::ir::Module> {
         let builder = melior::dialect::ods::builtin::ModuleOperationBuilder::new(
             &self.context,
             melior::ir::Location::unknown(&self.context),
@@ -32,7 +35,7 @@ impl CodeWriter {
 
 pub trait MLIRGen<'c, R> {
     // generate some MLIR code
-    fn mlir_gen(self, context: &'c melior::Context) -> Result<R>;
+    fn mlir_gen(&self, context: &'c melior::Context) -> Result<R>;
 }
 // MLIR modules are the top level container for code
 pub trait MLIRGenModule<'c>: MLIRGen<'c, melior::ir::Module<'c>> {}
@@ -53,38 +56,37 @@ pub fn load_builtin_dialects() -> melior::Context {
     context
 }
 
-impl MLIRGenRegion<'_> for ast::Expr {}
-impl<'c> MLIRGen<'c, melior::ir::Region<'c>> for ast::Expr {
-    fn mlir_gen(self, context: &'c melior::Context) -> Result<melior::ir::Region<'c>> {
+impl MLIRGenRegion<'_> for typed_ast::TypedExpr {}
+impl<'c> MLIRGen<'c, melior::ir::Region<'c>> for typed_ast::TypedExpr {
+    fn mlir_gen(&self, context: &'c melior::Context) -> Result<melior::ir::Region<'c>> {
         let region = melior::ir::Region::new();
         region.append_block(self.mlir_gen(context)?);
         Ok(region)
     }
 }
 
-impl MLIRGenBlock<'_> for ast::Expr {}
-impl<'c> MLIRGen<'c, melior::ir::block::Block<'c>> for ast::Expr {
-    fn mlir_gen(self, context: &'c melior::Context) -> Result<melior::ir::block::Block<'c>> {
+impl MLIRGenBlock<'_> for typed_ast::TypedExpr {}
+impl<'c> MLIRGen<'c, melior::ir::block::Block<'c>> for typed_ast::TypedExpr {
+    fn mlir_gen(&self, context: &'c melior::Context) -> Result<melior::ir::block::Block<'c>> {
         let block = melior::ir::block::Block::new(&[]);
-        match self {
-            Self::AtomLiteral(node) => block.append_operation(node.mlir_gen(context)?),
-            Self::FnDef(node) => block.append_operation(node.mlir_gen(context)?),
-            // Self::Let(node) => {
-            //     
-            // },
+        let operation = match self {
+            Self::AtomLiteral { node, ty } => node.mlir_gen(context)?,
+            Self::FnDef { node, ty } => node.mlir_gen(context)?,
+            Self::Let { node, ty } => node.mlir_gen(context)?,
             // Self::Term(node) => node.mlir_gen(context),
             // Self::FnCall(node) => node.mlir_gen(context),
             // Self::Frame(node) => node.mlir_gen(context),
             _ => todo!(),
         };
+        block.append_operation(operation);
         Ok(block)
     }
 }
 
-impl MLIRGenOp<'_> for ast::AtomLiteralNode {}
-impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for ast::AtomLiteralNode {
+impl MLIRGenOp<'_> for typed_ast::AtomLiteralNode {}
+impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for typed_ast::AtomLiteralNode {
     fn mlir_gen(
-        self,
+        &self,
         context: &'c melior::Context,
     ) -> Result<melior::ir::operation::Operation<'c>> {
         use crate::atomic::Literal;
@@ -92,7 +94,7 @@ impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for ast::AtomLiteralN
         use melior::ir::attribute::{FloatAttribute, IntegerAttribute};
         Ok(arith::constant(
             context,
-            match self.value {
+            match &self.value {
                 Literal::Int { atom, loc: _ } => IntegerAttribute::new(
                     melior::ir::r#type::IntegerType::signed(context, 64).into(),
                     atom.parse()?,
@@ -113,26 +115,38 @@ impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for ast::AtomLiteralN
     }
 }
 
-impl MLIRGenOp<'_> for ast::FnDefNode {}
-impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for ast::FnDefNode {
-    fn mlir_gen(self, context: &'c melior::Context) -> Result<melior::ir::operation::Operation<'c>> {
+impl MLIRGenOp<'_> for typed_ast::LetNode {}
+impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for typed_ast::LetNode {
+    fn mlir_gen(
+        &self,
+        context: &'c melior::Context,
+    ) -> Result<melior::ir::operation::Operation<'c>> {
+        Ok(melior::dialect::scf::execute_region(
+            &[self.region.get_type().mlir_gen(context)?],
+            self.region.mlir_gen(context)?,
+            Location::unknown(context),
+        ))
+    }
+}
+
+impl MLIRGenOp<'_> for typed_ast::FnDefNode {}
+impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for typed_ast::FnDefNode {
+    fn mlir_gen(
+        &self,
+        context: &'c melior::Context,
+    ) -> Result<melior::ir::operation::Operation<'c>> {
         use melior::dialect::func;
-        let inputs = self.signature.args.iter().map(|(_, type_sig)| {
-            let OptionalTypeSignature(atomic_ty, shape) = type_sig;
-            match (atomic_ty, shape.shape_slice()) {
-                (None, &[]) => todo!(),
-                (Some(ty), shape) => todo!(),
-                _ => todo!()
-            }
-        }).collect_vec();
-        todo!();
+
         // Ok(func::func(
-        //         context,
-        //         melior::ir::attribute::StringAttribute::new(context, ""),
-        //         melior::ir::attribute::TypeAttribute::new(
-        //             melior::ir::r#type::FunctionType::new(context, ).into()),
-        //         region,
-        //         attributes,
-        //         location))
+        //     context,
+        //     melior::ir::attribute::StringAttribute::new(context, ""),
+        //     melior::ir::attribute::TypeAttribute::new(
+        //         melior::ir::r#type::FunctionType::new(context, inputs, results).into(),
+        //     ),
+        //     region,
+        //     attributes,
+        //     location,
+        // ))
+        todo!()
     }
 }

@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ambassador = "0.4.1" # Delegate proc_macro, useful
 anyhow = { version="1.0.86", features=["backtrace"]} # nicer std::Error
-derive_more = "0.99.17" # Derive for fmt::Display
+derive_more = {version="1.0.0", features=["display"]} # Derive for fmt::Display
 half = "2.4.1" # half-precision floats
 itertools = "0.13.0" # helpful iterators
 num = "0.4.3" # Complex numbers & big integers
@@ -15,7 +15,9 @@ thiserror = "1.0.61" # derive macro for std::Error
 unicode-segmentation = "1.11.0" # unicode character for lexer
 melior = { version = "0.18.5", features = ["ods-dialects"], path="../../melior/melior" } # MLIR
 paste = "1.0.15" # identifier concat in macros
-serde = { version = "1.0.210", features=["derive"] }
+
+# serde = { version = "1.0.210", features=["derive"] }
+# bytemuck = "1.18.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0" # pretty-prints assertion failures

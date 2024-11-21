@@ -24,10 +24,6 @@ pub enum LudiExit {
 pub fn repl() -> Result<()> {
     let mut rl = DefaultEditor::new().expect("readline failure?");
     let mut e: DynamicEnv = Env::default().into();
-    #[cfg(feature = "with-file-history")]
-    if rl.load_history("$LUDIPATH/history.txt").is_err() {
-        println!("No previous history.");
-    }
     loop {
         let readline = rl.readline(">> ");
         match readline {
@@ -49,8 +45,6 @@ pub fn repl() -> Result<()> {
             }
         }
     }
-    #[cfg(feature = "with-file-history")]
-    rl.save_history("history.txt");
     Ok(())
 }
 

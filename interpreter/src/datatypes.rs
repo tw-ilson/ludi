@@ -1,6 +1,6 @@
 use crate::array::Array;
 
-use libludi::ast::CallSignature;
+use libludi::ast::FuncSignature;
 use libludi::atomic::Literal;
 use libludi::err::{Error, LudiError, Result};
 use libludi::shape::ambassador_impl_ArrayProps;
@@ -54,7 +54,7 @@ pub enum AtomicType {
     Box(Box<DataType>),
 
     //Fn
-    Fn(CallSignature),
+    Fn(FuncSignature),
 }
 
 #[repr(C, u8)]
@@ -73,7 +73,7 @@ pub enum ArrayType {
     Boolean(Array<bool>),
 
     Box(Array<Box<DataType>>),
-    Fn(Array<CallSignature>),
+    Fn(Array<FuncSignature>),
 }
 
 #[repr(u8)]
@@ -253,7 +253,7 @@ impl AtomicType {
     pub fn can_upcast_to(&self, other: &Self) -> bool {
         self.descriminant() < other.descriminant()
     }
-    pub fn upcast_to(self, descriminant: u8) -> Self {
+    pub fn upcast_to(self, _descriminant: u8) -> Self {
         //unimplemented!()
         self
     }

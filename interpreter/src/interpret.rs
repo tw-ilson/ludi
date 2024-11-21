@@ -55,7 +55,7 @@ impl Interpret for Expr {
 }
 
 impl Interpret for AtomLiteralNode {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
+    fn interpret(self, _e: &mut DynamicEnv) -> InterpretResult {
         Ok(self.value.clone().into())
     }
 }
@@ -87,7 +87,7 @@ impl Interpret for FrameNode {
     }
 }
 impl Interpret for FnDefNode {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
+    fn interpret(self, _e: &mut DynamicEnv) -> InterpretResult {
         todo!()
     }
 }
@@ -96,7 +96,7 @@ impl Interpret for FnCallNode {
     fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
         use libludi::types::PrimitiveFuncType;
         match self.callee {
-            Callee::Expression(expr) => todo!(),
+            Callee::Expression(_expr) => todo!(),
             Callee::Primitive(primitive_fn) => match primitive_fn {
                 PrimitiveFuncType::Add => {
                     assert_eq!(self.args.len(), 2);

@@ -1,5 +1,6 @@
 use libludi::{env::Name, lex::lex, parser::expression, shape::Shape, types::*};
 use pretty_assertions::assert_eq;
+use typecheck::TypeCheck;
 
 #[test]
 fn basic_types() -> anyhow::Result<()> {
@@ -60,5 +61,19 @@ fn frame_type() -> anyhow::Result<()> {
             shape: Shape::new(&[2,2]) ,
         }))
     );
+    Ok(())
+}
+
+#[test]
+fn fn_def_type() -> anyhow::Result<()> {
+    let expr = expression(&mut lex("
+        fn diff_square(x[u32], y[u32]) -> [u32] {
+            x*x - y*y
+        }
+    "))?;
+    let ty = expr.type_check(&mut TypeEnv::new(None))?.get_type();
+    // assert_eq!(
+    //     ty,
+    //     Type::Atom(Atom::Func()))
     Ok(())
 }

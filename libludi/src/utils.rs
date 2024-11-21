@@ -33,3 +33,50 @@ pub fn llvm_config(argument: &str) -> Result<String> {
     .to_string())
 }
 
+pub fn mlir_translate(argument: &str, mlir_path: &Path) -> anyhow::Result<String> {
+    let call = format!(
+        "{} {} {}",
+        PathBuf::from(llvm_config("--bindir")?)
+            .join("mlir-translate")
+            .display(),
+        mlir_path.display(),
+        argument
+    );
+
+    let output = if cfg!(target_os = "windows") {
+        Command::new("cmd").args(["/C", &call]).output()?
+    } else {
+        Command::new("sh").arg("-c").arg(&call).output()?
+    };
+
+    let stdout = str::from_utf8(&output.stdout)?.trim().to_string();
+    let stderr = str::from_utf8(&output.stderr)?.trim().to_string();
+    if !output.status.success() {
+        Err(anyhow::Error::msg(stderr))
+    } else {
+        Ok(stdout)
+    }
+}
+
+pub fn mlir_opt(argument: &str, mlir_path: &Path) -> anyhow::Result<String> {
+    let call = format!(
+        "{} {} {}",
+        PathBuf::from(llvm_config("--bindir")?)
+            .join("mlir-opt")
+            .display(),
+        mlir_path.display(),
+        argument
+    );
+    let output = if cfg!(target_os = "windows") {
+        Command::new("cmd").args(["/C", &call]).output()?
+    } else {
+        Command::new("sh").arg("-c").arg(&call).output()?
+    };
+    let stdout = str::from_utf8(&output.stdout)?.trim().to_string();
+    let stderr = str::from_utf8(&output.stderr)?.trim().to_string();
+    if !output.status.success() {
+        Err(anyhow::Error::msg(stderr))
+    } else {
+        Ok(stdout)
+    }
+}
