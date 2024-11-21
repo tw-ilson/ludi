@@ -1,5 +1,21 @@
-##Ludi
+# Ludi
+This is 'Ludi' an experimental programming language.It is focused on arrays, and has a number of basic features that you can play around with in the interpreter.
 
-This is Ludi (name is latin for 'game' or 'school', inspired by Herman Hesse's <i>Magister Ludi</i>), it is my personal repository for a language of this name which is aimed at researching models of computation for arrays and parallel algorithms. 
+```
+> let x = [4 3 2];
+> let y = 5;
+> print(x*y)
+    20 15 10
+> let z = reshape(iota(8), [2 2 2])
+> print(z)
+    1 2
+    3 4
 
-Currently I am working on a type system based on the Remora language
+    5 6
+    7 8
+```
+
+With a standard Rust toolchain it can be built and run:
+```
+cargo run -p interpreter
+```
