@@ -178,7 +178,7 @@ macro_rules! delegate_binops_std_array {
                 match self.shape().subshape_fit(rhs.shape()) {
                     Some(&[]) => Ok(Array::new(
                         self.shape_slice(),
-                        &izip!(self.data(), rhs.data())
+                        izip!(self.data(), rhs.data())
                             .map_while(|(a, b)| a.$fname(*b).ok())
                             .collect::<Vec<T>>(),
                     )),
@@ -187,7 +187,7 @@ macro_rules! delegate_binops_std_array {
                                 self.shape_slice(),
                                 {
                                     let flat_view = self.flat_view(shape_diff).expect("shape error");
-                                    &flat_view.into_iter().flat_map(|subarray| {
+                                    flat_view.into_iter().flat_map(|subarray| {
                                         subarray.iter().zip(rhs.data()).map_while(|(a, b)| a.$fname(*b).ok())
                                     }).collect::<Vec<T>>()
                                 }
@@ -199,7 +199,7 @@ macro_rules! delegate_binops_std_array {
                                     rhs.shape_slice(),
                                     {
                                         let flat_view = rhs.flat_view(shape_diff).expect("shape error");
-                                        &flat_view.into_iter().flat_map(|subarray| {
+                                        flat_view.into_iter().flat_map(|subarray| {
                                             subarray.iter().zip(self.data()).map_while(|(a, b)| a.$fname(*b).ok())
                                         }).collect::<Vec<T>>()
                                     }
@@ -247,7 +247,7 @@ where
     fn neg(self) -> Result<Self> {
         Ok(Array::new(
             self.shape_slice(),
-            &self
+            self
                 .data()
                 .iter()
                 .map_while(|a| a.neg().ok())
@@ -269,7 +269,7 @@ impl Neg for AtomicType {
     {
         use AtomicType::*;
         Ok(match self {
-            Int(a) => Int(a),
+            Int(a) => Int(-a),
             Float(a) => Float(-a),
             // Complex(a) => Complex(num::Complex::new(-a.re(), a.im())), //subtracts the real
             _ => return Err(Error::msg("unsupported op")),

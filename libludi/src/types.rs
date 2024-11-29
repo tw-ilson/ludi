@@ -420,7 +420,7 @@ pub mod typecheck {
                 }
                 Self::Term(node) => {
                     let ty = table.get(&node.name)?;
-                    Ok(typed_ast::term_node(ty, node.name))
+                    Ok(typed_ast::term_node(ty.clone(), node.name))
                 }
                 Self::Let(node) => {
                     let initializer = node.initializer.type_check(table)?;

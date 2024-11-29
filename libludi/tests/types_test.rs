@@ -1,4 +1,4 @@
-use libludi::{env::Name, lex::lex, parser::expression, shape::Shape, types::*};
+use libludi::{lex::lex, parser::expression, shape::Shape, types::*};
 use pretty_assertions::assert_eq;
 use typecheck::TypeCheck;
 
@@ -7,7 +7,7 @@ fn basic_types() -> anyhow::Result<()> {
     let prg1 = "1";
     let prg2 = "true";
     let prg3 = "1.0";
-    let mut table = TypeEnv::new(None);
+    let mut table = TypeEnv::new();
     let t_expr1 = expression(&mut lex(prg1))?
         .type_check(&mut table)?
         .get_type();
@@ -26,7 +26,7 @@ fn basic_types() -> anyhow::Result<()> {
 #[test]
 fn letexpr_types() -> anyhow::Result<()> {
     let prg = "let a = true in a";
-    let mut table = TypeEnv::new(None);
+    let mut table = TypeEnv::new();
     // let expr = expression(&mut lex(prg))?;
     let t_expr = expression(&mut lex(prg))?
         .type_check(&mut table)?
@@ -45,8 +45,8 @@ fn frame_type() -> anyhow::Result<()> {
             [[a b]
              [b a]]
     "))?;
-    let ty1 = expr1.type_check(&mut TypeEnv::new(None))?.get_type();
-    let ty2 = expr2.type_check(&mut TypeEnv::new(None))?.get_type();
+    let ty1 = expr1.type_check(&mut TypeEnv::new())?.get_type();
+    let ty2 = expr2.type_check(&mut TypeEnv::new())?.get_type();
     assert_eq!(
         ty1,
         Type::Array(Array::Arr(Arr {
@@ -71,7 +71,7 @@ fn fn_def_type() -> anyhow::Result<()> {
             x*x - y*y
         }
     "))?;
-    let ty = expr.type_check(&mut TypeEnv::new(None))?.get_type();
+    let ty = expr.type_check(&mut TypeEnv::new())?.get_type();
     // assert_eq!(
     //     ty,
     //     Type::Atom(Atom::Func()))

@@ -50,7 +50,7 @@ macro_rules! define_enum {
          }),+
     }
     ) => {
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, Clone, PartialEq)]
         pub enum $base_name {
             $(
                 $variant(NodeRef<paste::paste!{[<$variant Node>]}>)
@@ -68,7 +68,7 @@ macro_rules! define_nodes {
     ) => {
         $(
         paste::paste!{
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, Clone, PartialEq)]
         pub struct [<$variant Node>] {$(pub $childname: $childtype),*}
         }
         )+
@@ -101,7 +101,7 @@ pub use ast;
 pub use define_constructors;
 pub use define_enum;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Callee {
     Expression(Expr),
     Primitive(PrimitiveFuncType),

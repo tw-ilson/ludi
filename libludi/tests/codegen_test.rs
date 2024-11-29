@@ -15,7 +15,7 @@ use melior::{
 };
 
 fn verify_codegen(program: &str) -> anyhow::Result<()> {
-    let expr = expression(&mut lex(program))?.type_check(&mut TypeEnv::new(None))?;
+    let expr = expression(&mut lex(program))?.type_check(&mut TypeEnv::new())?;
     let writer = CodeWriter::new();
     let module = writer.write_ast(expr)?;
     println!(

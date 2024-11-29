@@ -1,13 +1,14 @@
 use std::env;
 use std::fs;
 use std::io;
+use std::rc::Rc;
 
 use crate::interpret::DynamicEnv;
 use crate::interpret::Interpret;
 use libludi::ast::Expr;
 use libludi::ast::ParseTree;
 use libludi::ast::Stmt;
-use libludi::env::{Env, EnvRef};
+use libludi::env::Env;
 use libludi::err::{Error, Result};
 use libludi::lex::lex;
 use libludi::parser::Parser;
@@ -23,7 +24,7 @@ pub enum LudiExit {
 
 pub fn repl() -> Result<()> {
     let mut rl = DefaultEditor::new().expect("readline failure?");
-    let mut e: DynamicEnv = Env::default().into();
+    let mut e: DynamicEnv = Env::new().into();
     loop {
         let readline = rl.readline(">> ");
         match readline {
@@ -72,7 +73,7 @@ pub fn run(source: &str, e: &mut DynamicEnv) -> Result<LudiExit> {
 }
 
 fn run_file(filename: String) -> Result<LudiExit> {
-    let mut e = DynamicEnv::new(None);
+    let mut e = DynamicEnv::new();
     let mut source = fs::read_to_string(filename).expect("Failed to read file");
     run(&mut source, &mut e)?;
     Ok(LudiExit::Success)

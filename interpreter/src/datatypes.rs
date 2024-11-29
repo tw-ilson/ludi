@@ -1,6 +1,8 @@
 use crate::array::Array;
+use crate::function::FunctionData;
+use crate::interpret::DynamicEnv;
 
-use libludi::ast::FuncSignature;
+use libludi::ast::{Arg, FnDefNode, FuncSignature};
 use libludi::atomic::Literal;
 use libludi::err::{Error, LudiError, Result};
 use libludi::shape::ambassador_impl_ArrayProps;
@@ -12,7 +14,9 @@ use ambassador::{delegatable_trait, Delegate};
 use itertools::Itertools;
 use libludi::token::TokenData;
 use std::cell::Cell;
+use std::fmt::{Arguments, Debug, Display};
 use std::hash::Hash;
+use std::iter::zip;
 use std::ops::Deref;
 use std::ptr::NonNull;
 use std::rc::Rc;
@@ -51,10 +55,10 @@ pub enum AtomicType {
     Boolean(bool),
 
     //Box
-    Box(Box<DataType>),
+    // Box(Box<DataType>),
 
     //Fn
-    Fn(FuncSignature),
+    Fn(FunctionData),
 }
 
 #[repr(C, u8)]
@@ -72,9 +76,10 @@ pub enum ArrayType {
     Character(Array<char>),
     Boolean(Array<bool>),
 
-    Box(Array<Box<DataType>>),
-    Fn(Array<FuncSignature>),
+    // Box(Array<Box<DataType>>),
+    Fn(Array<FunctionData>),
 }
+
 
 #[repr(u8)]
 #[derive(derive_more::Display, Eq, Debug, Copy, Clone, PartialEq)]
@@ -141,11 +146,11 @@ impl FromIterator<DataType> for Result<DataType> {
     }
 }
 
-impl std::fmt::Display for BoxType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<{}>", std::any::type_name_of_val(&self.0))
-    }
-}
+// impl std::fmt::Display for BoxType {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "<{}>", std::any::type_name_of_val(&self.0))
+//     }
+// }
 
 impl FromStr for DataTypeTag {
     type Err = Error;
@@ -240,7 +245,7 @@ impl ArrayType {
             Self::Complex(_) => TypeSignature(Complex, self.shape().clone()),
             Self::Character(_) => TypeSignature(Character, self.shape().clone()),
             Self::Boolean(_) => TypeSignature(Boolean, self.shape().clone()),
-            Self::Box(_) => todo!(),
+            // Self::Box(_) => todo!(),
             Self::Fn(_) => todo!(),
         }
     }
@@ -265,7 +270,7 @@ impl AtomicType {
             Self::Complex(x) => ArrayType::Complex(Array::scaler(x)),
             Self::Character(c) => ArrayType::Character(Array::scaler(c)),
             Self::Boolean(b) => ArrayType::Boolean(Array::scaler(b)),
-            Self::Box(a) => ArrayType::Box(Array::scaler(a.into())),
+            // Self::Box(a) => ArrayType::Box(Array::scaler(a.into())),
             Self::Fn(f) => ArrayType::Fn(Array::scaler(f)),
         }
     }
@@ -300,12 +305,12 @@ impl From<TokenData> for AtomicType {
     }
 }
 
-impl From<Literal> for DataType {
-    fn from(value: Literal) -> Self {
+impl From<&Literal> for DataType {
+    fn from(value: &Literal) -> Self {
         Self::Atomic(match value {
             Literal::Int { atom, .. } => AtomicType::Int(atom.parse().unwrap()),
             Literal::Float { atom, .. } => AtomicType::Float(atom.parse().unwrap()),
-            Literal::Bool { atom, .. } => AtomicType::Boolean(atom),
+            Literal::Bool { atom, .. } => AtomicType::Boolean(atom.clone()),
             Literal::Char { atom, .. } => AtomicType::Character({
                 assert_eq!(atom.len(), 1);
                 atom.chars().next().unwrap()

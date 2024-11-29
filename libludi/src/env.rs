@@ -1,11 +1,22 @@
 use crate::err::{Error, ErrorKind, LudiError, Result};
 use crate::token::{Location, Token};
 use crate::token::{Token::IDENTIFIER, TokenData};
-use std::cell::{RefCell,OnceCell};
+use std::cell::{OnceCell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 use std::str::FromStr;
+
+/*
+*  ┌────────────┐       ┌────────────┐
+*  │    Map     │       │    Map     │
+*  ├────────────┤       ├────────────┤
+*  │ d: <data>  │       │ a: <data>  │
+*  │ e: <data>  │ ────► │ b: <data>  │ ─ ─ ─►
+*  │ f: <data>  │       │ c: <data>  │
+*  │ ...        │       │ ...        │
+*  └────────────┘       └────────────┘
+*/
 
 #[derive(Eq, Debug, Clone)]
 pub struct Name {
@@ -13,31 +24,97 @@ pub struct Name {
     pub loc: Location,
 }
 
-pub type EnvRef<Symbol> = Rc<Env<Symbol>>;
-type EnvMap<Symbol> = HashMap<Name, Symbol>;
-
-pub struct Env<Symbol>
-{
+pub type EnvLink<Symbol> = Option<Box<EnvMap<Symbol>>>;
+pub struct EnvMap<Symbol> {
     // A scoped symbol table
-    table: EnvMap<Symbol>,
+    table: HashMap<Name, Symbol>,
     // The outer scope
-    prev: Option<EnvRef<Symbol>>,
+    prev: EnvLink<Symbol>,
 }
 
-impl<S> Env<S> where S: Clone {
-    pub fn new(prev: Option<Rc<Env<S>>>) -> Env<S> {
-        Env {
+pub struct Env<S> {
+    head: EnvLink<S>,
+}
+impl<S> Env<S>
+{
+    pub fn new() -> Self {
+        Self {
+            head: Some(EnvMap::new(None).into()),
+        }
+    }
+    pub fn new_with<I>(list: I) -> Self
+    where
+        I: Iterator<Item = (Name, S)>,
+    {
+        Self {
+            head: Some(EnvMap::new_with(None, list).into()),
+        }
+    }
+    pub fn push(&mut self) {
+        let new_node = EnvMap::new(self.head.take());
+        self.head = Some(new_node.into());
+    }
+    pub fn push_with<I>(&mut self, list: I)
+    where
+        I: Iterator<Item = (Name, S)>,
+    {
+        let new_node = EnvMap::new_with(self.head.take(), list);
+        self.head = Some(new_node.into());
+    }
+    pub fn pop(&mut self) {
+        match self.head.take() {
+            None => {}
+            Some(frame) => {
+                self.head = frame.prev;
+            }
+        }
+    }
+    pub fn get(&self, ident: &Name) -> Result<&S> {
+        match &self.head {
+            Some(table) => table.get(ident),
+            None => Err(Error::msg(format!("Unknown symbol name: {}", ident.name))),
+        }
+    }
+    pub fn put(&mut self, ident: Name, val: S) -> Option<S> {
+        match &mut self.head {
+            Some(table) => table.put(ident, val),
+            None => None,
+        }
+    }
+}
+
+impl<S> Drop for Env<S> {
+    fn drop(&mut self) {
+        let mut cur_link = self.head.take();
+        while let Some(mut boxed_node) = cur_link {
+            cur_link = boxed_node.prev.take();
+        }
+    }
+}
+
+impl<S> EnvMap<S>
+{
+    pub fn new(prev: EnvLink<S>) -> Self {
+        Self {
             table: HashMap::new(),
             prev,
         }
     }
-    pub fn put(&mut self, ident: Name, val: S) -> Option<S> {
-        self.table
-            .insert(ident, val.into())
+    pub fn new_with<I>(prev: EnvLink<S>, list: I) -> Self
+    where
+        I: Iterator<Item = (Name, S)>,
+    {
+        Self {
+            table: HashMap::from_iter(list),
+            prev,
+        }
     }
-    pub fn get(&self, ident: &Name) -> Result<S> {
+    pub fn put(&mut self, ident: Name, val: S) -> Option<S> {
+        self.table.insert(ident, val.into())
+    }
+    pub fn get(&self, ident: &Name) -> Result<&S> {
         if let Some(val) = self.table.get(ident) {
-            Ok(val.clone())
+            Ok(val)
         } else if let Some(p) = &self.prev {
             p.get(ident)
         } else {
@@ -45,14 +122,17 @@ impl<S> Env<S> where S: Clone {
         }
     }
 }
-impl<S:Debug> Debug for Env<S> {
+impl<S: Debug> Debug for EnvMap<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}\n->\n{:?}", self.prev, self.table)
     }
 }
-impl<S> Default for Env<S> where S:Clone {
+impl<S> Default for EnvMap<S>
+where
+    S: Clone,
+{
     fn default() -> Self {
-        Env::new(None)
+        Self::new(None)
     }
 }
 
@@ -72,7 +152,7 @@ impl TryFrom<TokenData> for Name {
         } else {
             Err(Error::at_token(
                 value,
-                "Trying to use non-identifier token as name"
+                "Trying to use non-identifier token as name",
             ))
         }
     }
@@ -82,7 +162,7 @@ impl FromStr for Name {
     fn from_str(s: &str) -> Result<Self> {
         Ok(Self {
             name: s.into(),
-            loc: Location { line: 1 }
+            loc: Location { line: 1 },
         })
     }
 }

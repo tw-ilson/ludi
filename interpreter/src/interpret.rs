@@ -1,32 +1,47 @@
-use itertools::Itertools;
-use libludi::{
-    ast::*,
-    env::{Env, EnvRef},
-    err::{Error, LudiError, Result},
-    shape::{ArrayProps, Shape, ShapeOps},
-    token::Token,
-    types::PrimitiveFuncType,
-};
-use std::{borrow::Borrow, rc::Rc};
-
-use crate::ops::*;
 use crate::{
     array::Iota,
     datatypes::{ArrayType, AtomicType, DataType},
 };
+use crate::{
+    function::{Callable, FunctionData},
+    ops::*,
+};
+use itertools::Itertools;
+use libludi::{
+    ast::*,
+    env::Env,
+    err::{Error, LudiError, Result},
+    shape::{ArrayProps, Shape, ShapeOps},
+    token::Token,
+    types::{self, Atom, AtomicDataType, PrimitiveFuncType, Type},
+};
+use std::{borrow::Borrow, cell::RefCell, rc::Rc};
+use std::{
+    borrow::BorrowMut,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-pub type DynamicEnv = Env<DataType>;
+pub type DynamicEnv = Env<Box<DataType>>;
 
 type InterpretResult = Result<DataType>;
-
 pub trait Interpret {
     fn interpret(self, e: &mut DynamicEnv) -> InterpretResult;
 }
-pub trait Resolve<R> {}
-pub trait Analyze<R> {}
+// pub trait Resolve<R> {}
+// pub trait Analyze<R> {}
+
+// pub fn globals() -> DynamicEnv<'static> {
+//     let env = DynamicEnv::new(None);
+//     // env.put(
+//     //     "clock".into(),
+//     // );
+//     // return DynamicEnv::new(Some(env.into()));
+//     todo!()
+// }
 
 impl Interpret for Stmt {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
+    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult 
+    {
         match self {
             Stmt::Expr(node) => node.expression.interpret(e),
             Stmt::Print(node) => {
@@ -41,7 +56,8 @@ impl Interpret for Stmt {
 }
 
 impl Interpret for Expr {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
+    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult 
+    {
         match self {
             Expr::Frame(node) => node.interpret(e),
             Expr::AtomLiteral(node) => node.interpret(e),
@@ -54,16 +70,27 @@ impl Interpret for Expr {
     }
 }
 
+impl Interpret for FnDefNode {
+    fn interpret(self, _e: &mut DynamicEnv) -> InterpretResult 
+    {
+        Ok(DataType::Atomic(AtomicType::Fn(FunctionData {
+            data: self.into(),
+        })))
+    }
+}
+
 impl Interpret for AtomLiteralNode {
-    fn interpret(self, _e: &mut DynamicEnv) -> InterpretResult {
-        Ok(self.value.clone().into())
+    fn interpret(self, _e: &mut DynamicEnv) -> InterpretResult 
+    {
+        Ok(DataType::from(&self.value))
     }
 }
 
 impl Interpret for LetNode {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
-        let init_val = self.initializer.interpret(e)?;
-        e.put(self.name, init_val);
+    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult 
+    {
+        let init_val = self.initializer.clone().interpret(e)?;
+        e.put(self.name.clone(), Box::new(init_val));
         if let Some(body) = self.region {
             body.interpret(e)
         } else {
@@ -73,30 +100,41 @@ impl Interpret for LetNode {
 }
 
 impl Interpret for TermNode {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
-        Ok(e.get(&self.name)?)
+    fn interpret(self, e: &mut DynamicEnv ) -> InterpretResult 
+    {
+        Ok(*e.get(&self.name)?.clone())
     }
 }
 
 impl Interpret for FrameNode {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
+    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult 
+    {
         self.expression_list
             .into_iter()
             .map(|expr| expr.interpret(e))
             .collect::<Result<Result<DataType>>>()?
     }
 }
-impl Interpret for FnDefNode {
-    fn interpret(self, _e: &mut DynamicEnv) -> InterpretResult {
-        todo!()
-    }
-}
 
 impl Interpret for FnCallNode {
-    fn interpret(self, e: &mut DynamicEnv) -> InterpretResult {
+    fn interpret(self, e: &mut DynamicEnv ) -> InterpretResult 
+    {
         use libludi::types::PrimitiveFuncType;
         match self.callee {
-            Callee::Expression(_expr) => todo!(),
+            Callee::Expression(expr) => {
+                let callee_val = expr.interpret(e)?;
+                let arguments = self
+                    .args
+                    .into_iter()
+                    .map(|a| a.interpret(e))
+                    .collect::<Result<Vec<DataType>>>()?;
+                match callee_val {
+                    DataType::Atomic(AtomicType::Fn(function)) => {
+                        Callable::call(function, arguments, e)
+                    }
+                    _ => Err(anyhow::anyhow!("Error: expression is not a function")),
+                }
+            }
             Callee::Primitive(primitive_fn) => match primitive_fn {
                 PrimitiveFuncType::Add => {
                     assert_eq!(self.args.len(), 2);
@@ -323,7 +361,10 @@ impl Interpret for FnCallNode {
                     let mut args = self.args.into_iter();
                     let (arg1, arg2) = (args.next().unwrap(), args.next().unwrap());
                     match (arg1.interpret(e)?, arg2.interpret(e)?) {
-                        (DataType::Array(mut array), DataType::Array(ArrayType::Int(shape_array))) => {
+                        (
+                            DataType::Array(mut array),
+                            DataType::Array(ArrayType::Int(shape_array)),
+                        ) => {
                             let newshape: Shape = shape_array.try_into()?;
                             array.reshape(newshape.shape_slice())?;
                             Ok(DataType::Array(array))

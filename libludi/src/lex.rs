@@ -18,11 +18,11 @@ macro_rules! delims {
     };
 }
 
-use crate::token::{Token, TokenData, Location};
-use Token::*;
+use crate::token::{Location, Token, TokenData};
 use std::iter::Peekable;
 use std::str::Chars;
 use unicode_segmentation::{Graphemes, UnicodeSegmentation};
+use Token::*;
 
 pub type Lexer<'s> = Peekable<TokenStream<'s>>;
 pub fn lex<'s>(s: &'s str) -> Lexer {
@@ -209,24 +209,26 @@ impl<'s> TokenStream<'s> {
             "}" => Some(CLOSE_BRACE),
             "(" => Some(OPEN_PAREN),
             ")" => Some(CLOSE_PAREN),
-            "true" => Some(TRUE),
-            "false" => Some(FALSE),
-            "and" => Some(AND),
-            "or" => Some(OR),
-            "if" => Some(IF),
-            "else" => Some(ELSE),
-            "elseif" => Some(ELSEIF),
-            "fn" => Some(FN),
-            "let" => Some(LET),
-            "in" => Some(IN),
-            "print" => Some(PRINT),
-            "array" => Some(ARRAY),
-            "frame" => Some(FRAME),
-            _ => {
+            ident => {
                 if !in_quote
                     && (trailing_whitespace || trailing_equal || trailing_delim || self.eof)
                 {
-                    Some(IDENTIFIER(charlist.clone()))
+                    match ident {
+                        "true" => Some(TRUE),
+                        "false" => Some(FALSE),
+                        "and" => Some(AND),
+                        "or" => Some(OR),
+                        "if" => Some(IF),
+                        "else" => Some(ELSE),
+                        "elseif" => Some(ELSEIF),
+                        "fn" => Some(FN),
+                        "let" => Some(LET),
+                        "in" => Some(IN),
+                        "print" => Some(PRINT),
+                        "array" => Some(ARRAY),
+                        "frame" => Some(FRAME),
+                        _ => Some(IDENTIFIER(charlist.clone())),
+                    }
                 } else {
                     // possible error here if we want to avoid creating bad idents
                     None

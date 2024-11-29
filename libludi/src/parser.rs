@@ -376,8 +376,10 @@ fn fncall(tokens: &mut Lexer) -> Result<Expr> {
                 let mut args = Vec::<Expr>::new();
                 if match_next!(tokens, CLOSE_PAREN).is_none() {
                     loop {
+                        if args.len() > 255 {
+                            return Err(Error::at_token(tokens.next().unwrap(), "Functions with >255 arguments are not allowed"))
+                        }
                         let a = expression(tokens)?;
-                        dbg!(&a);
                         args.push(a);
                         if match_next!(tokens, COMMA).is_none() {
                             break;

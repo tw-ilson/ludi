@@ -1,8 +1,6 @@
 use libludi::ast::*;
 use libludi::atomic::Literal;
 use libludi::env::Name;
-use libludi::err::ErrorKind;
-use libludi::err::ParseError;
 use libludi::lex::lex;
 use libludi::parser::*;
 use libludi::shape::Shape;
@@ -10,7 +8,6 @@ use libludi::token::*;
 use libludi::types;
 use libludi::types::PrimitiveFuncType;
 use pretty_assertions::assert_eq;
-use smallvec::smallvec;
 use std::str::FromStr;
 use std::vec;
 
@@ -601,7 +598,7 @@ fn nested_fncall() -> anyhow::Result<()> {
 }
 #[test]
 fn curried_fncalls() -> anyhow::Result<()> {
-    use std::str::FromStr;
+    
     
     let prg = expression(&mut lex("foo()()()"))?;
 

@@ -11,7 +11,7 @@ use std::ops::Index;
 // use crate::data::{OptionalTypeSignature, TypeSignature};
 
 // Row-major Array
-#[derive(ambassador::Delegate, Clone, Hash, Debug, PartialEq, Eq)]
+#[derive(ambassador::Delegate, Hash, Debug, Clone, PartialEq, Eq)]
 #[delegate(ArrayProps, target = "shape")]
 #[delegate(ShapeOps, target = "shape")]
 #[repr(C)]
@@ -24,17 +24,17 @@ pub struct Array<T> {
 //     fn get(idx: &[usize])
 // }
 
-impl<T: Clone> Array<T> {
-    pub fn new(shape: &[usize], data: &[T]) -> Self {
+impl<T> Array<T> {
+    pub fn new(shape: &[usize], data: Vec<T>) -> Self {
         Array {
             shape: Shape::new(shape),
             data: Vec::from(data),
         }
     }
     pub fn scaler(x: T) -> Self {
-        Self::new(&[], &[x])
+        Self::new(&[], vec![x])
     }
-    pub fn vector(xs: &[T]) -> Self {
+    pub fn vector(xs: Vec<T>) -> Self {
         Self::new(&[xs.len()], xs)
     }
     pub fn data(&self) -> &[T] {
@@ -52,9 +52,10 @@ impl<T: Clone> Array<T> {
                     .rev()
                     .scan(1, |acc, i| {
                         let res = *acc * idxs[i];
-                        *acc = self.shape[i];
+                        *acc *= self.shape[i];
                         Some(res)
                     })
+                    .inspect(|x| {dbg!(x);})
                     .sum::<usize>(),
             )
         }
@@ -227,7 +228,7 @@ frame_impl! {
     Complex
     Character
     Boolean
-    Box
+    // Box
     Fn
 }
 
