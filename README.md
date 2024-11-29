@@ -22,10 +22,10 @@ cargo run -p interpreter
 ```
 
 ## Current Goals & Progress
-[] Iterpreter (80%)
-[] type checking (75%)
-[] Code generation (50%)
-[] Optimizations (10%)
+- [ ] Interpreter (80%)
+- [ ] Type checking (75%)
+- [ ] Code generation (50%)
+- [ ] Optimizations (10%)
 
 ## Dependencies
 - Rust 2021 edition
