@@ -1,5 +1,5 @@
 # Ludi
-This is 'Ludi' an experimental programming language.It is focused on arrays, and has a number of basic features that you can play around with in the interpreter.
+This is 'Ludi' an experimental programming language. Inspired by APL, it is focused on multidimensional arrays, and has a number of basic features that you can play around with in the interpreter. I am logging and documenting the developement at [twilson.xyz](https://twilson.xyz/post) 
 
 ## Example
 ```
@@ -20,6 +20,12 @@ With a standard Rust toolchain it the interpreter can be built and run:
 ```
 cargo run -p interpreter
 ```
+
+## Current Goals & Progress
+[] Iterpreter (80%)
+[] type checking (75%)
+[] Code generation (50%)
+[] Optimizations (10%)
 
 ## Dependencies
 - Rust 2021 edition
