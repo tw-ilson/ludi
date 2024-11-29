@@ -14,6 +14,19 @@ This is 'Ludi' an experimental programming language. Inspired by APL, it is focu
 
     5 6
     7 8
+> fn inc(x) { x+1 }
+> print(inc(1));
+    2
+> print(inc([0 0 1]));
+
+    1 1 2
+> print(inc(z));
+
+    2 3
+    4 5
+
+    6 7
+    8 9
 ```
 ## Usage
 With a standard Rust toolchain it the interpreter can be built and run:
