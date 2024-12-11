@@ -17,6 +17,5 @@ pub mod ast;
 pub mod atomic;
 pub mod env;
 pub mod types;
-pub mod pipeline;
 pub mod codegen;
 pub mod optimize;

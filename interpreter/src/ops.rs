@@ -5,9 +5,9 @@
 use crate::array::Array;
 use libludi::shape::ArrayProps;
 // use crate::atomic::{AtomicType};
+use libludi::err::{Error, LudiError, RuntimeErrorKind, Result};
 use crate::datatypes::{ArrayType, AtomicType, Data, DataType};
 use itertools::izip;
-use libludi::err::{Error, LudiError, Result};
 use num::complex::ComplexFloat;
 use num::Complex;
 
@@ -63,7 +63,7 @@ macro_rules! delegate_binops_data {
                     match self {
                         DataType::Array(a) => Ok(DataType::Array(a.$fname()?)),
                         DataType::Atomic(a) => Ok(DataType::Atomic(a.$fname()?)),
-                        DataType::Unit => Err(Error::runtime_err("operating on unit type is not allowed"))
+                        DataType::Unit => Err(Error::runtime_err(RuntimeErrorKind::InterpretError, "operating on unit type is not allowed").into())
                     }
                 }
             }
@@ -147,7 +147,7 @@ macro_rules! delegate_binops_numbertype {
                         (AtomicType::Index(a), AtomicType::Index(b))  => Ok(AtomicType::Index(a.$fname(b)?)),
                         (AtomicType::Float(a), AtomicType::Float(b))  => Ok(AtomicType::Float(a.$fname(b)?)),
                         (AtomicType::Complex(a), AtomicType::Complex(b))  => Ok(AtomicType::Complex(a.$fname(b)?)),
-                        _ => {Err(Error::msg(format!("incompatible types for {}", stringify!($fname))))}
+                        _ => {Err(Error::runtime_err(RuntimeErrorKind::InterpretError, &format!("incompatible types for {}", stringify!($fname))).into())}
                     }
                 }
             }
@@ -205,7 +205,7 @@ macro_rules! delegate_binops_std_array {
                                     }
                                     )
                                 ),
-                        None => return Err(Error::msg("shape error"))},
+                        None => return Err(Error::runtime_err(RuntimeErrorKind::InterpretError, "shape error").into())},
                 }
             }
         }
@@ -272,7 +272,7 @@ impl Neg for AtomicType {
             Int(a) => Int(-a),
             Float(a) => Float(-a),
             // Complex(a) => Complex(num::Complex::new(-a.re(), a.im())), //subtracts the real
-            _ => return Err(Error::msg("unsupported op")),
+            _ => return Err(Error::runtime_err(RuntimeErrorKind::InterpretError, "unsupported type for negate").into()),
         })
     }
 }

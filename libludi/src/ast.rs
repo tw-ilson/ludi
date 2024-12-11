@@ -4,7 +4,7 @@ use std::ops::Deref;
 
 use crate::atomic::Literal;
 use crate::env::Name;
-use crate::err::{Error, ErrorKind, LudiError, Result};
+use crate::err::{Error, LudiError, Result};
 use crate::shape::{ArrayProps, Shape, ShapeOps};
 use crate::token::TokenData;
 use crate::types::{PrimitiveFuncType, Type};

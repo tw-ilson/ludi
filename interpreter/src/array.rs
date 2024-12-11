@@ -1,6 +1,6 @@
 use crate::datatypes::{ArrayType, AtomicType};
 use libludi::ast::FrameNode;
-use libludi::err::{Error, LudiError, Result};
+use libludi::err::{Error, LudiError, RuntimeErrorKind, Result};
 use libludi::shape::ambassador_impl_ArrayProps;
 use libludi::shape::ambassador_impl_ShapeOps;
 use libludi::shape::{ArrayProps, Shape, ShapeOps};
@@ -131,7 +131,7 @@ impl<A> IntoIterator for Array<A> {
     }
 }
 impl TryInto<Shape> for Array<isize> {
-    type Error = Error;
+    type Error = anyhow::Error;
     fn try_into(self) -> Result<Shape> {
         if self.rank() != 1 {
             Err(anyhow::anyhow!(
@@ -149,7 +149,7 @@ impl TryInto<Shape> for Array<isize> {
 }
 
 impl TryInto<Shape> for Array<usize> {
-    type Error = Error;
+    type Error = anyhow::Error;
     fn try_into(self) -> Result<Shape> {
         if self.rank() != 1 {
             Err(anyhow::anyhow!(
@@ -208,7 +208,7 @@ impl FromIterator<ArrayType> for Result<ArrayType> {
                                 newaxis +=1;
                                 Ok(array_base.data_raw().into_iter())
                             } else  {
-                                Err(Error::runtime_err("Frame error: mismatched types or shape in frame"))
+                                Err(Error::runtime_err(RuntimeErrorKind::InterpretError, "Frame error: mismatched types or shape in frame").into())
                             }).flatten_ok().collect::<Result<Vec<_>>>()?,
                             shape: Shape::new(&[newaxis]).concat(rest_of_shape),
                         }

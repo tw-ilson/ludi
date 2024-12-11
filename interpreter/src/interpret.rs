@@ -10,7 +10,7 @@ use itertools::Itertools;
 use libludi::{
     ast::*,
     env::Env,
-    err::{Error, LudiError, Result},
+    err::{Error, LudiError, Result, RuntimeErrorKind},
     shape::{ArrayProps, Shape, ShapeOps},
     token::Token,
     types::{self, Atom, AtomicDataType, PrimitiveFuncType, Type},
@@ -177,9 +177,9 @@ impl Interpret for FnCallNode {
                                 // interpreter should prevent branches diverge...
                             }
                         }
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError, 
                             "if expression expected boolean condition",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::Gt => {
@@ -195,9 +195,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Float(a)),
                             DataType::Atomic(AtomicType::Float(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a > b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError, 
                             "type error: '>' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::GtEq => {
@@ -213,9 +213,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Float(a)),
                             DataType::Atomic(AtomicType::Float(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a >= b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: '>=' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::Lt => {
@@ -231,9 +231,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Float(a)),
                             DataType::Atomic(AtomicType::Float(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a < b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: '<' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::LtEq => {
@@ -249,9 +249,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Float(a)),
                             DataType::Atomic(AtomicType::Float(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a <= b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: '<=' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::Ne => {
@@ -271,9 +271,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Character(a)),
                             DataType::Atomic(AtomicType::Character(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a != b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: '!=' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::Eq => {
@@ -293,9 +293,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Character(a)),
                             DataType::Atomic(AtomicType::Character(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a == b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: '==' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::And => {
@@ -308,9 +308,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Boolean(a)),
                             DataType::Atomic(AtomicType::Boolean(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a && b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: 'and' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::Or => {
@@ -323,9 +323,9 @@ impl Interpret for FnCallNode {
                             DataType::Atomic(AtomicType::Boolean(a)),
                             DataType::Atomic(AtomicType::Boolean(b)),
                         ) => Ok(DataType::Atomic(AtomicType::Boolean(a || b))),
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: 'or' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::Not => {
@@ -335,9 +335,9 @@ impl Interpret for FnCallNode {
                         DataType::Atomic(AtomicType::Boolean(a)) => {
                             Ok(DataType::Atomic(AtomicType::Boolean(!a)))
                         }
-                        _ => Err(Error::runtime_err(
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError,
                             "type error: 'not' op is not defined for between these types",
-                        )),
+                        ).into()),
                     }
                 }
                 PrimitiveFuncType::Neg => {
@@ -353,7 +353,7 @@ impl Interpret for FnCallNode {
                             crate::datatypes::ArrayType::Int(Iota::iota(i.try_into()?)),
                         )),
                         DataType::Array(ArrayType::Int(_a_i)) => todo!(),
-                        _ => Err(Error::runtime_err("error: Iota expects integer")),
+                        _ => Err(Error::runtime_err(RuntimeErrorKind::InterpretError, "error: Iota expects integer").into()),
                     }
                 }
                 PrimitiveFuncType::Reshape => {

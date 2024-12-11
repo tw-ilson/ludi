@@ -10,7 +10,7 @@ use libludi::ast::ParseTree;
 use libludi::ast::Stmt;
 use libludi::env::Env;
 use libludi::err::{Error, Result};
-use libludi::lex::lex;
+use libludi::lex::Lex;
 use libludi::parser::Parser;
 use libludi::parser::{expression, statement};
 use rustyline::error::ReadlineError;
@@ -52,7 +52,7 @@ pub fn repl() -> Result<()> {
 pub fn run(source: &str, e: &mut DynamicEnv) -> Result<LudiExit> {
     let dump_ast: bool = env::var("DUMP_AST").is_ok();
     let dump_tokens: bool = env::var("DUMP_TOKENS").is_ok();
-    let mut tokens = lex(source);
+    let mut tokens = Lex::lex(source);
     if dump_tokens {
         tokens.clone().for_each(|t| {
             println!("{:?}", t.token);

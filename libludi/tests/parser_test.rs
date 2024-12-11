@@ -1,7 +1,7 @@
 use libludi::ast::*;
 use libludi::atomic::Literal;
 use libludi::env::Name;
-use libludi::lex::lex;
+use libludi::lex::Lex;
 use libludi::parser::*;
 use libludi::shape::Shape;
 use libludi::token::*;
@@ -28,13 +28,13 @@ fn atom_float(lf: &str) -> Expr {
 fn scan_arithmetic_tokens() {
     let src = "+ - * /";
     let src2 = "+-*/";
-    let s = lex(src);
+    let s = src.lex();
     use libludi::token::Token::*;
     assert_eq!(
         s.map(|tok| tok.token).collect::<Vec<Token>>(),
         vec![PLUS, MINUS, STAR, SLASH]
     );
-    let s = lex(src2);
+    let s = src2.lex();
     assert_eq!(
         s.map(|tok| tok.token).collect::<Vec<Token>>(),
         vec![PLUS, MINUS, STAR, SLASH]
@@ -48,21 +48,21 @@ fn scan_number_literal() {
     let src3 = "2.0 + 0.3";
     use libludi::token::Token::*;
     assert_eq!(
-        lex(&src).next().unwrap(),
+        src.lex().next().unwrap(),
         TokenData {
             token: INTEGER_LITERAL("12".into()),
             loc: Location { line: 1 }
         }
     );
     assert_eq!(
-        lex(&src2).next().unwrap(),
+        src2.lex().next().unwrap(),
         TokenData {
             token: FLOAT_LITERAL("4712.08".into()),
             loc: Location { line: 1 }
         }
     );
     assert_eq!(
-        lex(&src3).map(|tok| tok.token).collect::<Vec<Token>>(),
+        src3.lex().map(|tok| tok.token).collect::<Vec<Token>>(),
         vec![
             FLOAT_LITERAL("2.0".into()),
             PLUS,
@@ -75,7 +75,7 @@ fn scan_number_literal() {
 fn scan_string_literal() {
     let src = "\"Hello,\" + \" world!\"";
     use libludi::token::Token::*;
-    let toks: Vec<Token> = lex(src).map(|d| d.token).collect::<Vec<Token>>();
+    let toks: Vec<Token> = src.lex().map(|d| d.token).collect::<Vec<Token>>();
     assert_eq!(
         toks.as_slice(),
         &[
@@ -88,7 +88,7 @@ fn scan_string_literal() {
 
 #[test]
 fn let_basic() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("let a = 10;"))?;
+    let expr = expression(&mut "let a = 10;".lex())?;
     assert_eq!(
         expr,
         let_node(
@@ -105,7 +105,7 @@ fn let_basic() -> anyhow::Result<()> {
 
 #[test]
 fn let_with_body() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("let a = 2 in a+2"))?;
+    let expr = expression(&mut "let a = 2 in a+2".lex())?;
     assert_eq!(
         expr,
         Expr::Let(
@@ -141,9 +141,7 @@ fn let_with_body() -> anyhow::Result<()> {
 }
 #[test]
 fn let_with_body_complex() -> anyhow::Result<()> {
-    let expr = expression(&mut lex(
-        "let a = 2 in let b = 4 in let c = a + b in foo(a, b, c)",
-    ))?;
+    let expr = expression(&mut "let a = 2 in let b = 4 in let c = a + b in foo(a, b, c)".lex())?;
     assert_eq!(
         expr,
         Expr::Let(
@@ -252,7 +250,7 @@ fn let_with_body_complex() -> anyhow::Result<()> {
 fn scan_stmts() {
     let src = "print 2+2;";
     use libludi::token::Token::*;
-    let toks: Vec<Token> = lex(src).map(|d| d.token).collect::<Vec<Token>>();
+    let toks: Vec<Token> = src.lex().map(|d| d.token).collect::<Vec<Token>>();
     assert_eq!(
         toks.as_slice(),
         &[
@@ -269,8 +267,8 @@ fn scan_stmts() {
 fn binary_expr1() -> anyhow::Result<()> {
     use itertools::Itertools;
     let src = "5 < 3";
-    dbg!(lex(src).into_iter().collect_vec());
-    let s: Expr = expression(&mut lex(src))?;
+    dbg!(src.lex().into_iter().collect_vec());
+    let s: Expr = expression(&mut src.lex())?;
     let s_test = Expr::FnCall(
         FnCallNode {
             callee: Callee::Primitive(PrimitiveFuncType::Lt),
@@ -286,7 +284,7 @@ fn binary_expr1() -> anyhow::Result<()> {
 #[test]
 fn binary_expr2() -> anyhow::Result<()> {
     use Expr::*;
-    let s = expression(&mut lex("75.4 + 1.006"))?;
+    let s = expression(&mut "75.4 + 1.006".lex())?;
 
     let s_test = FnCall(
         FnCallNode {
@@ -302,7 +300,7 @@ fn binary_expr2() -> anyhow::Result<()> {
 #[test]
 fn test_binary_operation() -> anyhow::Result<()> {
     use std::str::FromStr;
-    let prg = expression(&mut lex("a + b * c - d"))?;
+    let prg = expression(&mut "a + b * c - d".lex())?;
     assert_eq!(
         prg,
         Expr::FnCall(
@@ -360,7 +358,7 @@ fn test_binary_operation() -> anyhow::Result<()> {
 #[test]
 fn lambda_expr() -> anyhow::Result<()> {
     use std::str::FromStr;
-    let prg = expression(&mut lex("|a[3], b[3]|  -> [3] { a + b }"))?;
+    let prg = expression(&mut "|a[3], b[3]|  -> [3] { a + b }".lex())?;
     assert_eq!(
         prg,
         Expr::FnDef(
@@ -416,7 +414,7 @@ fn lambda_expr() -> anyhow::Result<()> {
 #[test]
 fn fndef_complex_body() -> anyhow::Result<()> {
     use std::str::FromStr;
-    let prg = expression(&mut lex("fn foo(x[5], y[5]) -> [5] { (x + y) * 2 }"))?;
+    let prg = expression(&mut "fn foo(x[5], y[5]) -> [5] { (x + y) * 2 }".lex())?;
     assert_eq!(
         prg,
         Expr::Let(
@@ -497,7 +495,7 @@ fn fndef_complex_body() -> anyhow::Result<()> {
 #[test]
 fn fncall() -> anyhow::Result<()> {
     use std::str::FromStr;
-    let prg = expression(&mut lex("foo(1, 2)"))?;
+    let prg = expression(&mut "foo(1, 2)".lex())?;
     assert_eq!(
         prg,
         Expr::FnCall(
@@ -537,7 +535,7 @@ fn fncall() -> anyhow::Result<()> {
 #[test]
 fn nested_fncall() -> anyhow::Result<()> {
     use std::str::FromStr;
-    let prg = expression(&mut lex("foo(bar(1), baz(2))"))?;
+    let prg = expression(&mut "foo(bar(1), baz(2))".lex())?;
     assert_eq!(
         prg,
         Expr::FnCall(
@@ -598,9 +596,7 @@ fn nested_fncall() -> anyhow::Result<()> {
 }
 #[test]
 fn curried_fncalls() -> anyhow::Result<()> {
-    
-    
-    let prg = expression(&mut lex("foo()()()"))?;
+    let prg = expression(&mut "foo()()()".lex())?;
 
     assert_eq!(
         prg,
@@ -616,15 +612,15 @@ fn curried_fncalls() -> anyhow::Result<()> {
                                     }
                                     .into()
                                 )),
-                                args: vec![] 
+                                args: vec![]
                             }
                             .into()
                         )),
-                        args: vec![] 
+                        args: vec![]
                     }
                     .into()
                 )),
-                args: vec![] 
+                args: vec![]
             }
             .into()
         )
@@ -632,11 +628,9 @@ fn curried_fncalls() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[test]
 fn parse_array1() -> anyhow::Result<()> {
-    let mut tokens = lex("[ 1 2 3 2 1 ]");
-    let expr = expression(&mut tokens)?;
+    let expr = expression(&mut "[ 1 2 3 2 1 ]".lex())?;
 
     assert_eq!(
         expr,
@@ -653,7 +647,7 @@ fn parse_array1() -> anyhow::Result<()> {
 
 #[test]
 fn frame1() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("let a = 1; let b = 2; [ a b ]"))?;
+    let expr = expression(&mut "let a = 1; let b = 2; [ a b ]".lex())?;
     assert_eq!(
         expr,
         let_node(
@@ -696,11 +690,14 @@ fn frame1() -> anyhow::Result<()> {
 //                         ),
 #[test]
 fn diff_square() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("
+    let expr = expression(
+        &mut "
         fn diff_square(x, y) {
             x*x - y*y
         }
-    "))?;
+    "
+        .lex(),
+    )?;
     assert_eq!(
         expr,
         Expr::Let(
@@ -803,11 +800,11 @@ fn diff_square() -> anyhow::Result<()> {
 
 #[test]
 fn diff_square_typesignatures() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("
+    let expr = expression(&mut "
         fn diff_square(x[u32], y[u32]) -> [u32] {
             x*x - y*y
         }
-    "))?;
+    ".lex())?;
     assert_eq!(
         expr,
         Expr::Let(
@@ -916,7 +913,7 @@ fn diff_square_typesignatures() -> anyhow::Result<()> {
 
 #[test]
 fn condition1() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("if a>b { a } else { b }"))?;
+    let expr = expression(&mut "if a>b { a } else { b }".lex())?;
     assert_eq!(
         expr,
         fn_call_node(
@@ -936,7 +933,7 @@ fn condition1() -> anyhow::Result<()> {
 
 #[test]
 fn condition2() -> anyhow::Result<()> {
-    let expr = expression(&mut lex("if a>b {a} else { if b>c {b} else {c} }"))?;
+    let expr = expression(&mut "if a>b {a} else { if b>c {b} else {c} }".lex())?;
     assert_eq!(
         expr,
         fn_call_node(

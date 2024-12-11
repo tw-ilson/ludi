@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use crate::err::{ErrorKind, Result};
+use crate::err::{LudiError, Result};
 
 #[derive(derive_more::Display, Debug, Clone, PartialEq, Eq)]
 pub enum Token {

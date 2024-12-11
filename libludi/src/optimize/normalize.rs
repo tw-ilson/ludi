@@ -1,6 +1,5 @@
-use crate::ast::{self};
-use crate::ast::{define_ast, define_constructors, define_enum, define_nodes};
-use crate::data::DataType;
+use crate::ast::{ast, define_constructors, define_enum, define_nodes};
+use crate::type::DataType;
 use crate::env::Name;
 use crate::err::{LangError, Result};
 use crate::parse_err;

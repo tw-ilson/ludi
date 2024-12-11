@@ -1,8 +1,9 @@
 use libludi::{
-    codegen::writer::{load_builtin_dialects, CodeWriter},
-    lex::lex,
+    codegen::{load_builtin_dialects, CodeWriter},
+    lex::Lex,
     parser::expression,
     types::{typecheck::TypeCheck, TypeEnv},
+    err::Result,
 };
 use melior::{
     dialect::{arith, func},
@@ -14,32 +15,40 @@ use melior::{
     },
 };
 
-fn verify_codegen(program: &str) -> anyhow::Result<()> {
-    let expr = expression(&mut lex(program))?.type_check(&mut TypeEnv::new())?;
+fn verify_codegen(program: &str) -> Result<bool> {
+    let expr = expression(&mut program.lex())?.type_check(&mut TypeEnv::new())?;
     let writer = CodeWriter::new();
-    let module = writer.write_ast(expr)?;
+    let module = writer.write_ast(&expr)?;
     println!(
         "{}",
         module
             .as_operation()
             .to_string_with_flags(OperationPrintingFlags::new())?
     );
-    assert!(module.as_operation().verify());
+    Ok(module.as_operation().verify())
+}
+
+#[test]
+fn return_constant() -> anyhow::Result<()> {
+    assert!(verify_codegen("fn main() -> i64 { 1 }")?);
     Ok(())
 }
 
 #[test]
-fn atom_literal() -> anyhow::Result<()> {
-    verify_codegen("1")
+fn identity_func() -> anyhow::Result<()> {
+    assert!(verify_codegen("fn id(a) { a }")?);
+    Ok(())
 }
+
 
 #[test]
 fn fn_simple() -> anyhow::Result<()> {
-    verify_codegen(
+    assert!(verify_codegen(
         "fn add(x, y) {
             x + y
         }"
-    )
+    )?);
+    Ok(())
 }
 
 #[test]
@@ -104,7 +113,6 @@ fn melior_example_simple() -> anyhow::Result<()> {
             .as_operation()
             .to_string_with_flags(OperationPrintingFlags::new())?
     );
-    // assert!(module.as_operation().verify());
-    panic!();
+    assert!(module.as_operation().verify());
     Ok(())
 }

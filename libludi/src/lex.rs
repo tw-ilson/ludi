@@ -25,8 +25,16 @@ use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 use Token::*;
 
 pub type Lexer<'s> = Peekable<TokenStream<'s>>;
-pub fn lex<'s>(s: &'s str) -> Lexer {
-    TokenStream::new(s).peekable()
+
+pub trait Lex {
+    fn lex(&self) -> Lexer;
+}
+
+
+impl Lex for str {
+    fn lex(&self) -> Lexer {
+        TokenStream::new(self).peekable()
+    }
 }
 
 #[derive(Clone)]

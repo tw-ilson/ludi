@@ -1,4 +1,4 @@
-use crate::err::{Error, ErrorKind, LudiError, Result};
+use crate::err::{Error, LudiError, ParseErrorKind, Result};
 use crate::token::{Location, Token, TokenData};
 use std::fmt::{write, Debug, Display};
 use std::hash::Hash;
@@ -13,7 +13,7 @@ pub enum Literal {
 }
 
 impl TryFrom<TokenData> for Literal {
-    type Error = Error;
+    type Error = anyhow::Error;
     fn try_from(value: TokenData) -> Result<Self> {
         let loc = value.loc;
         Ok(match value.token {
@@ -21,7 +21,13 @@ impl TryFrom<TokenData> for Literal {
             Token::FLOAT_LITERAL(atom) => Literal::Float { loc, atom },
             Token::TRUE => Literal::Bool { loc, atom: true },
             Token::FALSE => Literal::Bool { loc, atom: false },
-            _ => Err(Error::at_token(value, "Expected atomic value"))?,
+            _ => {
+                return Err(
+                    Error::parse_err(ParseErrorKind::Literal, "expected literal value")
+                        .at_token(value)
+                        .into(),
+                )
+            }
         })
     }
 }

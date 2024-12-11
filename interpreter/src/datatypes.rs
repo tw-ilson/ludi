@@ -4,7 +4,7 @@ use crate::interpret::DynamicEnv;
 
 use libludi::ast::{Arg, FnDefNode, FuncSignature};
 use libludi::atomic::Literal;
-use libludi::err::{Error, LudiError, Result};
+use libludi::err::{Error, LudiError, Result, RuntimeErrorKind};
 use libludi::shape::ambassador_impl_ArrayProps;
 use libludi::shape::ambassador_impl_ShapeOps;
 use libludi::shape::{ArrayProps, Shape, ShapeOps};
@@ -35,7 +35,7 @@ pub trait Data // BinaryOp +
 pub enum DataType {
     Array(ArrayType),
     Atomic(AtomicType),
-    Unit
+    Unit,
 }
 impl Data for DataType {}
 
@@ -80,7 +80,6 @@ pub enum ArrayType {
     Fn(Array<FunctionData>),
 }
 
-
 #[repr(u8)]
 #[derive(derive_more::Display, Eq, Debug, Copy, Clone, PartialEq)]
 pub enum DataTypeTag {
@@ -123,8 +122,9 @@ impl FromIterator<DataType> for Result<DataType> {
                         } else {
                             //TODO: add better error information
                             Err(Error::runtime_err(
+                                RuntimeErrorKind::InterpretError,
                                 "Frame error: found non conforming value in frame",
-                            ))
+                            ).into())
                         }
                     })
                     .collect::<Result<Result<ArrayType>>>()??,
@@ -134,13 +134,17 @@ impl FromIterator<DataType> for Result<DataType> {
                             Ok(a.upgrade())
                         } else {
                             Err(Error::runtime_err(
+                                RuntimeErrorKind::InterpretError,
                                 "Frame error: found non conforming value in frame",
-                            ))
+                            ).into())
                         }
                     })
                     .collect::<Result<Result<ArrayType>>>()??,
                 Some(DataType::Unit) => return Ok(DataType::Unit),
-                None => Err(Error::runtime_err("Frame error: empty frame"))?,
+                None => Err(Error::runtime_err(
+                    RuntimeErrorKind::InterpretError,
+                    "Frame error: empty frame"
+                ))?,
             }
         }))
     }
@@ -153,7 +157,7 @@ impl FromIterator<DataType> for Result<DataType> {
 // }
 
 impl FromStr for DataTypeTag {
-    type Err = Error;
+    type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "u8" => Ok(DataTypeTag::UInt8),
@@ -172,15 +176,21 @@ impl FromStr for DataTypeTag {
             "char" => Ok(DataTypeTag::Character),
             "bool" => Ok(DataTypeTag::Boolean),
             "box" => Err(Error::runtime_err(
+                RuntimeErrorKind::InterpretError,
                 "Box type not supported in function signature",
-            )),
+            ).into()),
             "fn" => Err(Error::runtime_err(
+                RuntimeErrorKind::InterpretError,
                 "Fn type not suppored in function signature",
-            )),
+            ).into()),
             "()" => Err(Error::runtime_err(
+                RuntimeErrorKind::InterpretError,
                 "Unit type not supported in function signature",
-            )),
-            _ => Err(Error::runtime_err("not a known builtin type")),
+            ).into()),
+            _ => Err(Error::runtime_err(
+                RuntimeErrorKind::InterpretError,
+                "not a known builtin type",
+            ).into()),
         }
     }
 }
@@ -192,12 +202,13 @@ pub struct TypeSignature(pub DataTypeTag, pub Shape);
 pub struct OptionalTypeSignature(pub Option<DataTypeTag>, pub Shape);
 
 impl TryFrom<OptionalTypeSignature> for TypeSignature {
-    type Error = Error;
+    type Error = anyhow::Error;
     fn try_from(value: OptionalTypeSignature) -> Result<Self> {
         Ok(TypeSignature(
-            value
-                .0
-                .ok_or(Error::runtime_err("expected explicit type annotations"))?,
+            value.0.ok_or(Error::runtime_err(
+                RuntimeErrorKind::InterpretError,
+                "expected explicit type annotations",
+            ))?,
             value.1,
         ))
     }

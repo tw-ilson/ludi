@@ -1,3 +1,5 @@
+use std::fmt::write;
+
 use crate::{
     // allocator::BlockError,
     env::Name,
@@ -6,72 +8,124 @@ use crate::{
 use anyhow;
 use thiserror;
 
-// For errors related to the parsing of grammer
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum ParseError {}
-// For errors related to semantics
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum CompileError {}
-// For errors related to code generation & backends
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum CodeGenError {}
-// For errors related to runtime & interpreter
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum RuntimeError {}
-
-#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
-pub enum ErrorKind {
-    LexErr,
-    ParseErr,   // additional information
-    CompileErr, //additional information
-    CodeGenErr, // additional information
-    RuntimeErr, // additional information
-}
-
-// impl std::fmt::Display for LangError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::LexErr(msg) => write!(f, "Lexical Error: {}", msg),
-//             Self::ParseErr(msg) => write!(f, "Parsing Error: {}", msg),
-//             Self::CompileErr(msg) => write!(f, "Compile Error: {}",  msg),
-//             Self::RuntimeErr(msg) => write!(f, "Runtime Error: {}", msg),
-//             // Self::AllocErr(msg) => write!(f, "Allocation Error"),
-//         }
-//     }
-// }
-
 // re-export of anyhow result type
 pub type Result<T> = anyhow::Result<T>;
-pub type Error = anyhow::Error;
-pub trait LudiError {
-    fn with_name(name: Name, msg: &str) -> Self;
-    fn at_token(tok: TokenData, msg: &str) -> Self;
-    fn runtime_err(msg: &'static str) -> Self;
-    fn parse_err(msg: &'static str) -> Self;
-    fn compile_err(msg: &'static str) -> Self;
-    fn codegen_err(msg: &'static str) -> Self;
+
+#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
+pub enum LexErrorKind {
+    TokenError,
+}
+#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
+pub enum ParseErrorKind {
+    Expr,
+    Literal,
+    Ident,
+    Frame,
+    LetExpr,
+    FnDef,
+    FnCall,
+}
+#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
+pub enum CompileErrorKind {
+    TailCallOptError,
+}
+#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
+pub enum TypeErrorKind {
+    TypeMismatch,
+
+    Unknown,
+    Unsupported,
+}
+#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
+pub enum CodeGenErrorKind {
+    MLIRError,
+}
+#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
+pub enum RuntimeErrorKind {
+    InterpretError,
 }
 
-impl LudiError for Error {
-    fn with_name(name: Name, msg: &str) -> Self {
-        Error::msg(format!("Error at {}: {}", name, msg))
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum LudiError {
+    LexError(LexErrorKind),
+    CompileError(CompileErrorKind),
+    ParseError(ParseErrorKind),
+    TypeError(TypeErrorKind),
+    CodeGenError(CodeGenErrorKind),
+    RuntimeError(RuntimeErrorKind),
+    // Add additional information
+}
+
+impl std::fmt::Display for LudiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LexError(kind) => write!(f, "Lexical Error: {}", kind),
+            Self::ParseError(kind) => write!(f, "Parsing Error: {}", kind),
+            Self::CompileError(kind) => write!(f, "Compile Error: {}", kind),
+            Self::TypeError(kind) => write!(f, "Type Error: {}", kind),
+            Self::CodeGenError(kind) => write!(f, "Codegen Error: {}", kind),
+            Self::RuntimeError(kind) => write!(f, "Runtime Error: {}", kind),
+            // Self::AllocErr(msg) => write!(f, "Allocation Error"),
+        }
     }
-    fn at_token(tok: TokenData, msg: &str) -> Self {
-        Error::msg(format!(
-            "Error line {}: unexpected {:?}; {}",
-            tok.loc, tok.token, msg
-        ))
+}
+
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub struct Error {
+    error: LudiError,
+    msg: String,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} -- {}", self.error, self.msg)
     }
-    fn runtime_err(msg: &'static str) -> Self {
-        Error::new(ErrorKind::RuntimeErr).context(msg)
+}
+
+
+impl Error {
+    // pub fn with_name(name: Name, msg: &str) -> Self {
+    //     Error::msg(format!("Error at {}: {}", name, msg))
+    // }
+    pub fn at_token(mut self, tok: TokenData) -> Self {
+        self.msg = format!("Error line {} at \"{}\" -- {}", tok.loc, tok.token, self.msg);
+        return self;
     }
-    fn parse_err(msg: &'static str) -> Self {
-        Error::new(ErrorKind::ParseErr).context(msg)
+    pub fn lex_err(kind: LexErrorKind, msg: &str) -> Self {
+        Self {
+            error: LudiError::LexError(kind),
+            msg: msg.to_string(),
+        }
     }
-    fn compile_err(msg: &'static str) -> Self {
-        Error::new(ErrorKind::CompileErr).context(msg)
+    pub fn runtime_err(kind: RuntimeErrorKind, msg: &str) -> Self {
+        Self {
+            error: LudiError::RuntimeError(kind),
+            msg: msg.to_string(),
+        }
     }
-    fn codegen_err(msg: &'static str) -> Self {
-        Error::new(ErrorKind::CodeGenErr).context(msg)
+    pub fn parse_err(kind: ParseErrorKind, msg: &str) -> Self {
+        Self {
+            error: LudiError::ParseError(kind),
+            msg: msg.to_string(),
+        }
+    }
+    pub fn compile_err(kind: CompileErrorKind, msg: &str) -> Self {
+        Self {
+            error: LudiError::CompileError(kind),
+            msg: msg.to_string(),
+        }
+    }
+    pub fn type_err(kind: TypeErrorKind, msg: &str) -> Self {
+        Self {
+            error: LudiError::TypeError(kind),
+            msg: msg.to_string(),
+        }
+    }
+    pub fn codegen_err(kind: CodeGenErrorKind, msg: &str) -> Self {
+        Self {
+            error: LudiError::CodeGenError(kind),
+            msg: msg.to_string(),
+        }
     }
 }

@@ -4,8 +4,8 @@ use crate::{
     ast::*,
     atomic::Literal,
     env::Name,
-    err::{Error, LudiError, Result},
-    lex::{lex, Lexer},
+    err::{Error, LudiError, ParseErrorKind, Result},
+    lex::Lexer,
     shape::{ArrayProps, Shape, ShapeVec},
     token::{Location, Token, TokenData},
     types::{Arr, Array, Atom, PrimitiveFuncType, Type},
@@ -28,15 +28,12 @@ impl Parser for Lexer<'_> {
 macro_rules! parse_failure {
     ($tokens:ident, $msg:expr) => {
         if let Some(bad_tok) = $tokens.peek() {
-            Error::at_token(bad_tok.clone(), $msg)
+            Error::parse_err(ParseErrorKind::Expr, $msg).at_token(bad_tok.clone())
         } else {
-            Error::at_token(
-                TokenData {
-                    token: EOF,
-                    loc: Location { line: 0 },
-                },
-                $msg,
-            )
+            Error::parse_err(ParseErrorKind::Expr, $msg).at_token(TokenData {
+                token: EOF,
+                loc: Location { line: 0 },
+            })
         }
     };
 }
@@ -59,12 +56,17 @@ macro_rules! expect_next {
     };
 }
 
+pub fn program(tokens: &mut Lexer) -> Result<Vec<Stmt>> {
+    (0..)
+        .map_while(|_| tokens.peek().is_some().then(|| statement(tokens)))
+        .collect()
+}
+
 pub fn statement(tokens: &mut Lexer) -> Result<Stmt> {
     if tokens.peek().is_some() {
         if match_next!(tokens, PRINT).is_some() {
             Ok(Stmt::Print({
                 let expression = expression(tokens)?;
-                expect_next!(tokens, SEMICOLON)?;
                 PrintNode { expression }.into()
             }))
         // } else if match_next!(tokens, OPEN_BRACE).is_some() {
@@ -194,9 +196,11 @@ fn typesignature(tokens: &mut Lexer) -> Result<Type> {
                         token: INTEGER_LITERAL(n_str),
                         ..
                     }) => Some(
-                        n_str
-                            .parse::<usize>()
-                            .or(Err(Error::parse_err("shape expects an unsigned int"))),
+                        n_str.parse::<usize>().or(Err(Error::parse_err(
+                            ParseErrorKind::FnDef,
+                            "shape expects an unsigned int",
+                        )
+                        .into())),
                     ),
                     _ => None,
                 })
@@ -377,7 +381,12 @@ fn fncall(tokens: &mut Lexer) -> Result<Expr> {
                 if match_next!(tokens, CLOSE_PAREN).is_none() {
                     loop {
                         if args.len() > 255 {
-                            return Err(Error::at_token(tokens.next().unwrap(), "Functions with >255 arguments are not allowed"))
+                            return Err(Error::parse_err(
+                                ParseErrorKind::FnCall,
+                                "Functions with >255 arguments are not allowed",
+                            )
+                            .at_token(tokens.next().unwrap())
+                            .into());
                         }
                         let a = expression(tokens)?;
                         args.push(a);

@@ -1,11 +1,10 @@
-use anyhow::Error;
-
+use crate::err::{Error, ParseErrorKind, TypeErrorKind};
 use crate::token::TokenData;
 use crate::{
     ast::{Expr, FuncSignature},
     atomic::Literal,
     env::{Env, Name},
-    err::{ErrorKind, LudiError, Result},
+    err::{LudiError, Result},
     shape::Shape,
 };
 use std::{fmt::Display, rc::Rc, str::FromStr};
@@ -147,7 +146,7 @@ impl Type {
 }
 
 impl FromStr for AtomicDataType {
-    type Err = crate::err::Error;
+    type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "u8" => Ok(AtomicDataType::UInt8),
@@ -165,11 +164,17 @@ impl FromStr for AtomicDataType {
             "complex" => Ok(AtomicDataType::Complex),
             "char" => Ok(AtomicDataType::Character),
             "bool" => Ok(AtomicDataType::Boolean),
-            "()" => Err(Error::parse_err(
+            "()" => Err(Error::type_err(TypeErrorKind::Unsupported,
                 "Unit type not supported in function signature",
-            )),
-            _ => Err(Error::parse_err("not a known builtin type")),
+            ).into()),
+            _ => Err(Error::type_err(crate::err::TypeErrorKind::Unknown,"not a known builtin type").into()),
         }
+    }
+}
+impl TryFrom<&str> for AtomicDataType {
+    type Error = anyhow::Error;
+    fn try_from(value: &str) -> Result<Self> {
+        FromStr::from_str(value)
     }
 }
 
@@ -183,7 +188,7 @@ impl Into<Array> for Atom {
 }
 
 impl TryFrom<&str> for Atom {
-    type Error = Error;
+    type Error = anyhow::Error;
     fn try_from(value: &str) -> Result<Self> {
         use std::str::FromStr;
         if let Ok(atomic_type) = AtomicDataType::from_str(value) {
@@ -196,7 +201,7 @@ impl TryFrom<&str> for Atom {
 }
 
 impl TryFrom<&str> for PrimitiveFuncType {
-    type Error = crate::err::Error;
+    type Error = anyhow::Error;
     fn try_from(value: &str) -> crate::err::Result<Self> {
         use crate::token::Token;
         match value {
@@ -212,7 +217,7 @@ impl TryFrom<&str> for PrimitiveFuncType {
             "iota" => Ok(Self::Iota),
             "slice" => Ok(Self::Slice),
             "scatter" => Ok(Self::Scatter),
-            _ => Err(Error::parse_err("tried to parse a primitive function")),
+            _ => Err(Error::parse_err(ParseErrorKind::FnCall, "tried to parse a primitive function").into()),
         }
     }
 }
@@ -356,7 +361,7 @@ pub mod typed_ast {
     }
 }
 pub mod typecheck {
-    use crate::ast;
+    use crate::{ast, err::ParseErrorKind};
 
     use super::*;
     use itertools::Itertools;
@@ -410,12 +415,10 @@ pub mod typecheck {
                                 Type::Array(Array::ArrayRef(_array_ref)) => todo!(),
                             }
                         } else {
-                            // return type_err!()
-                            panic!()
+                            Err(Error::type_err(TypeErrorKind::TypeMismatch, &format!("Found non-conforming type in frame; expected {}", t1)).into())
                         }
                     } else {
-                        // return type_err!()
-                        panic!()
+                        Err(Error::type_err(TypeErrorKind::Unsupported, "empty frame").into())
                     }
                 }
                 Self::Term(node) => {
@@ -428,7 +431,7 @@ pub mod typecheck {
                     let region = match node.region {
                         Some(body) => body.type_check(table)?,
                         None => {
-                            return Err(Error::compile_err("dangling let body not allowed here"))
+                            return Err(Error::parse_err(ParseErrorKind::LetExpr, "dangling let body not allowed here").into())
                         }
                     }; // No restrictions on region type
                     Ok(typed_ast::let_node(
@@ -439,7 +442,7 @@ pub mod typecheck {
                     ))
                 }
                 Self::FnDef(node) => {
-                    // TODO: IMPORTANT: Some kind of pi or sigma expression?
+                    // TODO: IMPORTANT: Some kind of pi or sigma?
                     let body = node.body.type_check(table)?;
                     if body.get_type() != node.signature.ret[0] {
                         return Err(anyhow::anyhow!(
@@ -467,30 +470,48 @@ pub mod typecheck {
                                 Err(anyhow::anyhow!("type error - not a function!"))
                             }
                         }
-                        ast::Callee::Primitive(prim) => todo!(),
+                        ast::Callee::Primitive(prim) => match prim {
+                            PrimitiveFuncType::Add => todo!(),
+                            PrimitiveFuncType::Sub => todo!(),
+                            PrimitiveFuncType::Mul => todo!(),
+                            PrimitiveFuncType::Div => todo!(),
+                            PrimitiveFuncType::Mod => todo!(),
+                            PrimitiveFuncType::Neg => todo!(),
+                            PrimitiveFuncType::Inv => todo!(),
+                            PrimitiveFuncType::Eq => todo!(),
+                            PrimitiveFuncType::Ne => todo!(),
+                            PrimitiveFuncType::Gt => todo!(),
+                            PrimitiveFuncType::GtEq => todo!(),
+                            PrimitiveFuncType::Lt => todo!(),
+                            PrimitiveFuncType::LtEq => todo!(),
+                            PrimitiveFuncType::Or => todo!(),
+                            PrimitiveFuncType::And => todo!(),
+                            PrimitiveFuncType::Not => todo!(),
+                            PrimitiveFuncType::If => todo!(),
+                            PrimitiveFuncType::Reshape => todo!(),
+                            PrimitiveFuncType::Reduce => todo!(),
+                            PrimitiveFuncType::Scan => todo!(),
+                            PrimitiveFuncType::Fold => todo!(),
+                            PrimitiveFuncType::Trace => todo!(),
+                            PrimitiveFuncType::Reverse => todo!(),
+                            PrimitiveFuncType::Filter => todo!(),
+                            PrimitiveFuncType::Append => todo!(),
+                            PrimitiveFuncType::Rotate => todo!(),
+                            PrimitiveFuncType::Iota => todo!(),
+                            PrimitiveFuncType::Slice => todo!(),
+                            PrimitiveFuncType::Scatter => todo!(),
+                            PrimitiveFuncType::IntToFloat => todo!(),
+                            PrimitiveFuncType::IntToBool => todo!(),
+                            PrimitiveFuncType::BoolToInt => todo!(),
+                            PrimitiveFuncType::FloatToInt => todo!(),
+                        },
                     }
                 }
             }
         }
     }
-
-    // impl TypeCheck<Type> for PrimitiveFuncType {
-    //     fn type_check(self, _table: &mut TypeEnv) -> Result<Type> {
-    //         let ty = Type::Atom(Atom::Func(match self {
-    //             Self::Add => Func {
-    //                 parameters:
-    //             }.into(),
-    //             // Self::Sub => (),
-    //             // Self::Mul => (),
-    //             // Self::Div => (),
-    //             _ => todo!()
-    //         }));
-    //         Ok(ty)
-    //     }
-    // }
-
     impl TryInto<Func> for FuncSignature {
-        type Error = Error;
+        type Error = anyhow::Error;
         fn try_into(self) -> Result<Func> {
             let parameters: Vec<Type> = self
                 .args

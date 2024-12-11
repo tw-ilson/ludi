@@ -41,7 +41,7 @@ impl Callable for FunctionData {
             ));
         }
         e.push_with(
-            zip(self.params().into_iter(), arguments.into_iter()).map(|(Arg(name, ty), value)| {
+            zip(self.params().into_iter(), arguments.into_iter()).map(|(Arg(name, _ty), value)| {
                 //TODO: check type agreement
                 (name.clone(), value.into())
             }),

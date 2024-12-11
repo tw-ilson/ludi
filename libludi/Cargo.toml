@@ -13,8 +13,9 @@ num = "0.4.3" # Complex numbers & big integers
 smallvec = "1.13.2" # stack-allocated Vec
 thiserror = "1.0.61" # derive macro for std::Error
 unicode-segmentation = "1.11.0" # unicode character for lexer
-melior = { version = "0.18.5", features = ["ods-dialects"], path="../../melior/melior" } # MLIR
+melior = { version="0.19.1", features = ["ods-dialects"], path="../../melior/melior" } # MLIR
 paste = "1.0.15" # identifier concat in macros
+mlir-sys = "0.3.0"
 
 # serde = { version = "1.0.210", features=["derive"] }
 # bytemuck = "1.18.0"

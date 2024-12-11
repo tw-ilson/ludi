@@ -25,7 +25,7 @@ use array::{Array, Iota};
 use datatypes::{ArrayType, AtomicType, DataType};
 use libludi::err::Result;
 use libludi::shape::{ArrayProps, Shape, ShapeOps};
-use libludi::lex::lex;
+use libludi::lex::Lex;
 use libludi::parser::expression;
 use ops::*;
 
@@ -73,7 +73,7 @@ fn test_frame() -> Result<()>{
 fn basic_unary() -> Result<()> {
     // assert_eq!(8, std::mem::size_of::<Atom>());
     let mut e = DynamicEnv::new();
-    let expr = expression(&mut lex("let a = 2 in -a"))?;
+    let expr = expression(&mut Lex::lex("let a = 2 in -a"))?;
     // dbg!(&expr);
     let r = expr.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "-2");
@@ -83,7 +83,7 @@ fn basic_unary() -> Result<()> {
 #[test]
 fn basic_arithmetic1() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let r = expression(&mut lex("2+2"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("2+2"))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "4");
     Ok(())
 }
@@ -91,59 +91,59 @@ fn basic_arithmetic1() -> Result<()> {
 #[test]
 fn basic_arithmetic2() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let r = expression(&mut lex("1./2."))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("1./2."))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "0.5");
     Ok(())
 }
 #[test]
 fn basic_arithmetic3() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let r = expression(&mut lex("1.0/(2.0+3.0)"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("1.0/(2.0+3.0)"))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "0.2");
     Ok(())
 }
 #[test]
 fn basic_arithmetic4() ->Result<()> {
     let mut e = DynamicEnv::new();
-    let r = expression(&mut lex("5.0 * 1.0/(2.0+3.0)"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("5.0 * 1.0/(2.0+3.0)"))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "1");
     Ok(())
 }
 #[test]
 fn basic_arithmetic5() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let r = expression(&mut lex("2.0 + 0.3"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("2.0 + 0.3"))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "2.3");
     Ok(())
 }
 #[test]
 fn basic_arithmetic6() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let r = expression(&mut lex("10.0 + 17.0 - 12.2/4.0"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("10.0 + 17.0 - 12.2/4.0"))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "23.95");
     Ok(())
 }
 #[test]
 fn assignment1() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let _ = expression(&mut lex("let a = 2.0+0.3;"))?.interpret(&mut e)?;
-    let r = expression(&mut lex("a"))?.interpret(&mut e)?;
+    let _ = expression(&mut Lex::lex("let a = 2.0+0.3;"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("a"))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "2.3");
-    let r = expression(&mut lex("let a = a + a; a"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("let a = a + a; a"))?.interpret(&mut e)?;
     assert_eq!(format!("{}",r), "4.6");
     Ok(())
 }
 #[test]
 fn assignment_err1() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let _ = expression(&mut lex("notathing"))?.interpret(&mut e).expect_err("failed to detect unbound symbol!");
+    let _ = expression(&mut Lex::lex("notathing"))?.interpret(&mut e).expect_err("failed to detect unbound symbol!");
     Ok(())
 }
 
 #[test] 
 fn automap() -> Result<()> {
     let mut e = DynamicEnv::new();
-    let r = expression(&mut lex("reshape(iota(8), [4 2]) * [0 2]"))?.interpret(&mut e)?;
+    let r = expression(&mut Lex::lex("reshape(iota(8), [4 2]) * [0 2]"))?.interpret(&mut e)?;
     match r {
         DataType::Array(ArrayType::Int(int_array)) => {
             assert_eq!(int_array.shape_slice(), &[4, 2]);

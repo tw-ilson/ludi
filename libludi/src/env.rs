@@ -1,8 +1,8 @@
-use crate::err::{Error, ErrorKind, LudiError, Result};
+use crate::err::{Error, LudiError, ParseErrorKind, Result};
 use crate::token::{Location, Token};
 use crate::token::{Token::IDENTIFIER, TokenData};
 use std::cell::{OnceCell, RefCell};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -24,10 +24,13 @@ pub struct Name {
     pub loc: Location,
 }
 
+// type Map<N, S> = HashMap<N, S>;
+type Map<N, S> = BTreeMap<N, S>;
+
 pub type EnvLink<Symbol> = Option<Box<EnvMap<Symbol>>>;
 pub struct EnvMap<Symbol> {
     // A scoped symbol table
-    table: HashMap<Name, Symbol>,
+    table: Map<Name, Symbol>,
     // The outer scope
     prev: EnvLink<Symbol>,
 }
@@ -35,8 +38,7 @@ pub struct EnvMap<Symbol> {
 pub struct Env<S> {
     head: EnvLink<S>,
 }
-impl<S> Env<S>
-{
+impl<S> Env<S> {
     pub fn new() -> Self {
         Self {
             head: Some(EnvMap::new(None).into()),
@@ -72,7 +74,7 @@ impl<S> Env<S>
     pub fn get(&self, ident: &Name) -> Result<&S> {
         match &self.head {
             Some(table) => table.get(ident),
-            None => Err(Error::msg(format!("Unknown symbol name: {}", ident.name))),
+            None => Err(anyhow::anyhow!("Unknown symbol name: {}", ident.name)),
         }
     }
     pub fn put(&mut self, ident: Name, val: S) -> Option<S> {
@@ -92,11 +94,10 @@ impl<S> Drop for Env<S> {
     }
 }
 
-impl<S> EnvMap<S>
-{
+impl<S> EnvMap<S> {
     pub fn new(prev: EnvLink<S>) -> Self {
         Self {
-            table: HashMap::new(),
+            table: Map::new(),
             prev,
         }
     }
@@ -105,7 +106,7 @@ impl<S> EnvMap<S>
         I: Iterator<Item = (Name, S)>,
     {
         Self {
-            table: HashMap::from_iter(list),
+            table: Map::from_iter(list),
             prev,
         }
     }
@@ -118,7 +119,7 @@ impl<S> EnvMap<S>
         } else if let Some(p) = &self.prev {
             p.get(ident)
         } else {
-            Err(Error::msg(format!("Unknown symbol name: {}", ident.name)))
+            Err(anyhow::anyhow!("Unknown symbol name: {}", ident.name))
         }
     }
 }
@@ -141,8 +142,18 @@ impl std::hash::Hash for Name {
         self.name.hash(state)
     }
 }
+impl std::cmp::Ord for Name {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+impl std::cmp::PartialOrd for Name {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.name.cmp(&other.name))
+    }
+}
 impl TryFrom<TokenData> for Name {
-    type Error = Error;
+    type Error = anyhow::Error;
     fn try_from(value: TokenData) -> Result<Self> {
         if let Token::IDENTIFIER(name) = value.token {
             Ok(Name {
@@ -150,15 +161,13 @@ impl TryFrom<TokenData> for Name {
                 loc: value.loc,
             })
         } else {
-            Err(Error::at_token(
-                value,
-                "Trying to use non-identifier token as name",
-            ))
+            Err(Error::parse_err(ParseErrorKind::Ident, "Trying to use non-identifier token as name")
+                .at_token(value).into())
         }
     }
 }
 impl FromStr for Name {
-    type Err = crate::err::Error;
+    type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
         Ok(Self {
             name: s.into(),

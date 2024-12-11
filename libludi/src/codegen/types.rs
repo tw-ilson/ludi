@@ -1,3 +1,5 @@
+use melior::ir::TypeLike;
+
 use super::writer::{self, MLIRGen};
 use crate::err::Result;
 use crate::shape::ArrayProps;
@@ -83,8 +85,8 @@ impl<'c> writer::MLIRGen<'c, melior::ir::Type<'c>> for types::AtomicDataType {
             types::AtomicDataType::BFloat16 => melior::ir::r#type::Type::bfloat16(context),
             types::AtomicDataType::Float32 => melior::ir::r#type::Type::float32(context),
             types::AtomicDataType::Float64 => melior::ir::r#type::Type::float64(context),
-            types::AtomicDataType::Complex => {
-                melior::ir::r#type::Type::complex(melior::ir::r#type::Type::float32(context))
+            types::AtomicDataType::Complex => unsafe {
+                    melior::ir::r#type::Type::from_raw(mlir_sys::mlirComplexTypeGet(melior::ir::r#type::Type::float32(context).to_raw()))
             }
             types::AtomicDataType::UInt8 => {
                 melior::ir::r#type::IntegerType::unsigned(context, 8).into()

@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use melior::ir::operation::OperationPrintingFlags;
 use melior::ir::r#type::FunctionType;
 use melior::ir::Location;
 
@@ -9,20 +10,35 @@ use crate::types;
 use crate::types::typed_ast;
 use crate::types::GetType;
 
+pub trait WriteMLIR {
+    fn write(&self) -> String;
+}
+
+impl WriteMLIR for typed_ast::TypedExpr {
+    fn write(&self) -> String {
+        let writer = CodeWriter::new();
+        let module = writer.write_ast(self)
+            .expect("error: failed to convert AST to MLIR");
+        module.as_operation().to_string_with_flags(OperationPrintingFlags::default())
+            .expect("error: failed to convert MLIR Module to String")
+    }
+}
+
 // an object which contains an MLIR context and produces a module
 pub struct CodeWriter {
     // manages a single thread of MLIR core context
     pub context: melior::Context,
 }
 impl CodeWriter {
-    pub fn new(// what are the arguments
+    pub fn new(
+        // ne argz?
     ) -> Self {
         let context = load_builtin_dialects();
         // debug locations in code
         CodeWriter { context }
     }
 
-    pub fn write_ast(&self, ast: typed_ast::TypedExpr) -> Result<melior::ir::Module> {
+    pub fn write_ast(&self, ast: &typed_ast::TypedExpr) -> Result<melior::ir::Module> {
         let builder = melior::dialect::ods::builtin::ModuleOperationBuilder::new(
             &self.context,
             melior::ir::Location::unknown(&self.context),
