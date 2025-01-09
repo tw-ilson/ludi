@@ -64,7 +64,8 @@ impl Shape {
         }
     }
 
-    // checks if the other shape is a valid subshape of this
+    // checks if the other shape is a valid subshape of this (shape agreement)
+    // returns the shape of the extra dimensions (the shape of the application)
     // ex: [2 1] <= [2 2 1], but [2 1] !<= [2 1 1]
     pub fn subshape_fit(&self, other: &Self) -> Option<&[usize]> {
             if let Some(rank_diff) = self.rank().checked_sub(other.rank()) {

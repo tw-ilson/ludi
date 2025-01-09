@@ -116,6 +116,7 @@ pub struct FuncSignature {
     pub ret: Vec<Type>,
 }
 
+// --------------------------------------------------------
 // AST productions for the lang of format:
 // meta-symbol {
 //      production { attributes... }
@@ -138,6 +139,7 @@ ast! {
         // | Condition 
     }
 }
+// --------------------------------------------------------
 
 impl Display for FuncSignature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
