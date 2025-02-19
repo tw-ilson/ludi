@@ -18,4 +18,4 @@ pub mod atomic;
 pub mod env;
 pub mod types;
 pub mod codegen;
-pub mod optimize;
+pub mod normalize;

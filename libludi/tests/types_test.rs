@@ -20,17 +20,6 @@ fn basic_types() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn arithmetic_basic() -> anyhow::Result<()> {
-    let prg1 = "1 + 2";
-    let prg2 = "[1 1] + [[2 2] [3 3]]";
-    let mut table = TypeEnv::new();
-    let t_expr1 = expression(&mut prg1.lex())?.type_check(&mut table)?;
-    let t_expr2 = expression(&mut prg2.lex())?.type_check(&mut table)?;
-    assert_eq!(&Type::Atom(Atom::Literal(AtomicDataType::Int64)), t_expr1.get_type());
-    assert_eq!(&Type::Array(Array::Arr(Arr{ element: Atom::Literal(AtomicDataType::Int64), shape: Shape::new(&[2,2])})), t_expr2.get_type());
-    Ok(())
-}
 
 #[test]
 fn letexpr_basic() -> anyhow::Result<()> {
@@ -73,15 +62,27 @@ fn frame_basic() -> anyhow::Result<()> {
 }
 
 #[test]
+fn arithmetic_basic() -> anyhow::Result<()> {
+    let prg1 = "1 + 2";
+    let prg2 = "[1 1] + [[2 2] [3 3]]";
+    let mut table = TypeEnv::new();
+    let t_expr1 = expression(&mut prg1.lex())?.type_check(&mut table)?;
+    let t_expr2 = expression(&mut prg2.lex())?.type_check(&mut table)?;
+    assert_eq!(&Type::Atom(Atom::Literal(AtomicDataType::Int64)), t_expr1.get_type());
+    assert_eq!(&Type::Array(Array::Arr(Arr{ element: Atom::Literal(AtomicDataType::Int64), shape: Shape::new(&[2,2])})), t_expr2.get_type());
+    Ok(())
+}
+
+#[test]
 fn fn_def_basic() -> anyhow::Result<()> {
     let expr = expression(&mut "
-        fn diff_square(x[u32], y[u32]) -> [u32] {
+        fn diff_square(x[i64], y[i64]) -> [i64] {
             x*x - y*y
         }
+        diff_square([1 0], [0 1])
     ".lex())?;
-    let ty = expr.type_check(&mut TypeEnv::new())?.get_type();
-    // assert_eq!(
-    //     ty,
-    //     Type::Atom(Atom::Func()))
+    // println!("{:#?}", expr);
+    let ty = expr.type_check(&mut TypeEnv::new())?;
+    assert_eq!(ty.get_type(), &Type::Array(Array::Arr(Arr{ element: Atom::Literal(AtomicDataType::Int64), shape: Shape::new(&[2])})));
     Ok(())
 }

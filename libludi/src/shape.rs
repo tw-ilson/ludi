@@ -20,6 +20,14 @@ pub trait ArrayProps {
 pub trait ShapeOps {
     fn reshape(&mut self, newshape: &[usize]) -> Result<()>;
 }
+#[ambassador::delegatable_trait]
+pub trait Frame {
+    // A "view" from one frame to another is the dimension of `self` in cells of shape `other`
+    fn view(&self, other: &Self) -> Option<Shape>;
+    fn view_unordered(&self, other: &Self) -> Option<Shape> {
+        self.view(other).or(other.view(self))
+    }
+}
 
 impl ArrayProps for Shape {
     fn shape_slice(&self) -> &[usize] {
@@ -58,19 +66,26 @@ impl Shape {
     pub fn empty() -> Shape {
         Self::default()
     }
+    pub fn is_empty(&self) -> bool {
+        self.s.is_empty()
+    }
     pub fn concat(self, other: Self) -> Self {
         Self {
             s: self.s.into_iter().chain(other.s.into_iter()).collect(),
         }
     }
+}
+
+impl Frame for Shape {
 
     // checks if the other shape is a valid subshape of this (shape agreement)
     // returns the shape of the extra dimensions (the shape of the application)
-    // ex: [2 1] <= [2 2 1], but [2 1] !<= [2 1 1]
-    pub fn subshape_fit(&self, other: &Self) -> Option<&[usize]> {
+    // ex: [2 1] <= [2 2 1] so return 2, 
+    // ex: [2 1] !<= [2 1 1] so return None
+    fn view(&self, other: &Self) -> Option<Shape> {
             if let Some(rank_diff) = self.rank().checked_sub(other.rank()) {
                 if &self.shape_slice()[rank_diff..] == other.shape_slice() {
-                    return Some(&self.shape_slice()[..rank_diff])
+                    return Some(Shape::new(&self.shape_slice()[..rank_diff]))
                 } 
             }
             None

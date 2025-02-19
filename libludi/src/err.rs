@@ -29,10 +29,16 @@ pub enum ParseErrorKind {
 pub enum CompileErrorKind {
     TailCallOptError,
 }
+
+#[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
+pub enum SemanticErrorKind {
+    NormalizeError,
+    CanonicalizeError,
+}
 #[derive(thiserror::Error, derive_more::Display, Debug, Clone)]
 pub enum TypeErrorKind {
     TypeMismatch,
-
+    ShapeMismatch,
     Unknown,
     Unsupported,
 }
@@ -50,6 +56,7 @@ pub enum LudiError {
     LexError(LexErrorKind),
     CompileError(CompileErrorKind),
     ParseError(ParseErrorKind),
+    SemanticError(SemanticErrorKind),
     TypeError(TypeErrorKind),
     CodeGenError(CodeGenErrorKind),
     RuntimeError(RuntimeErrorKind),
@@ -62,6 +69,7 @@ impl std::fmt::Display for LudiError {
             Self::LexError(kind) => write!(f, "Lexical Error: {}", kind),
             Self::ParseError(kind) => write!(f, "Parsing Error: {}", kind),
             Self::CompileError(kind) => write!(f, "Compile Error: {}", kind),
+            Self::SemanticError(kind) => write!(f, "Semantic Error: {}", kind),
             Self::TypeError(kind) => write!(f, "Type Error: {}", kind),
             Self::CodeGenError(kind) => write!(f, "Codegen Error: {}", kind),
             Self::RuntimeError(kind) => write!(f, "Runtime Error: {}", kind),
@@ -113,6 +121,12 @@ impl Error {
     pub fn compile_err(kind: CompileErrorKind, msg: &str) -> Self {
         Self {
             error: LudiError::CompileError(kind),
+            msg: msg.to_string(),
+        }
+    }
+    pub fn semantic_err(kind: SemanticErrorKind, msg: &str) -> Self {
+        Self {
+            error: LudiError::SemanticError(kind),
             msg: msg.to_string(),
         }
     }

@@ -16,12 +16,13 @@ use itertools::Itertools;
 use Token::*;
 
 pub trait Parser {
-    fn parse(&mut self) -> Result<Expr>;
+    fn parse(&mut self) -> Result<ParseTree>;
 }
 impl Parser for Lexer<'_> {
-    fn parse(&mut self) -> Result<Expr> {
-        // (0..).map_while(|_| expression(self)).collect()
-        expression(self)
+    fn parse(&mut self) -> Result<ParseTree> {
+        Ok(ParseTree {
+            toplevel_expressions: vec![expression(self)?]
+        })
     }
 }
 

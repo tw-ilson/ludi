@@ -30,7 +30,9 @@ fn verify_codegen(program: &str) -> Result<bool> {
 
 #[test]
 fn return_constant() -> anyhow::Result<()> {
-    assert!(verify_codegen("fn main() -> i64 { 1 }")?);
+    assert!(verify_codegen(" 1 ")?);
+    // assert!(verify_codegen(" -1 ")?);
+    assert!(verify_codegen(" 2.4 ")?);
     Ok(())
 }
 

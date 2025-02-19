@@ -30,7 +30,6 @@ pub trait Lex {
     fn lex(&self) -> Lexer;
 }
 
-
 impl Lex for str {
     fn lex(&self) -> Lexer {
         TokenStream::new(self).peekable()
@@ -40,9 +39,34 @@ impl Lex for str {
 #[derive(Clone)]
 pub struct TokenStream<'s> {
     source: Peekable<Graphemes<'s>>,
-    line: usize,
-    eof: bool,
+    // line: usize,
+    // eof: bool,
+    state: LexState,
 }
+
+#[derive(Debug, Clone)]
+struct LexState {
+    in_quote: bool,
+    trailing_equal: bool,
+    trailing_whitespace: bool,
+    trailing_delim: bool,
+    eof: bool,
+    line: usize,
+}
+
+impl Default for LexState {
+    fn default() -> Self {
+        Self {
+            in_quote: false,
+            trailing_equal: false,
+            trailing_whitespace: false,
+            trailing_delim: false,
+            line: 1,
+            eof: false,
+        }
+    }
+}
+
 impl Iterator for TokenStream<'_> {
     type Item = TokenData;
     fn next(&mut self) -> Option<Self::Item> {
@@ -50,7 +74,7 @@ impl Iterator for TokenStream<'_> {
         loop {
             match self.source.next() {
                 Some("\n") => {
-                    self.line += 1;
+                    self.state.line += 1;
                     continue;
                 }
                 Some(" " | "\t") => {
@@ -63,11 +87,11 @@ impl Iterator for TokenStream<'_> {
                     if charlist.is_empty() {
                         return None;
                     }
-                    self.eof = true;
+                    self.state.eof = true;
                     if let Some(token) = self.complete_token(&mut charlist) {
                         return Some(TokenData {
                             token,
-                            loc: Location { line: self.line },
+                            loc: Location { line: self.state.line },
                         });
                     } else {
                         panic!("remove trailing tokens");
@@ -77,7 +101,7 @@ impl Iterator for TokenStream<'_> {
             if let Some(token) = self.complete_token(&mut charlist) {
                 return Some(TokenData {
                     token,
-                    loc: Location { line: self.line },
+                    loc: Location { line: self.state.line },
                 });
             }
         }
@@ -88,35 +112,34 @@ impl<'s> TokenStream<'s> {
     pub fn new(text: &'s str) -> Self {
         Self {
             source: text.graphemes(true).peekable(),
-            line: 1,
-            eof: false,
+            state: LexState::default(),
         }
     }
     fn complete_token(&mut self, charlist: &mut String) -> Option<Token> {
         if charlist.len() < 1 {
             return None;
         };
-        let in_quote: bool = charlist.starts_with(&['"']);
-        let mut trailing_equal: bool = false;
-        let mut trailing_whitespace: bool = false;
-        let mut trailing_delim: bool = false;
+        self.state.in_quote = charlist.starts_with(&['"']);
+        self.state.trailing_equal = false;
+        self.state.trailing_whitespace = false;
+        self.state.trailing_delim = false;
         if let Some(&trailing) = self.source.peek() {
             match trailing {
                 " " | "\t" | "\n" => {
-                    trailing_whitespace = true;
+                    self.state.trailing_whitespace = true;
                 }
                 "=" => {
-                    trailing_equal = true;
+                    self.state.trailing_equal = true;
                 }
                 delims!() => {
-                    trailing_delim = true;
+                    self.state.trailing_delim = true;
                 }
 
                 _ => {}
             }
         }
         //STRING LITERALS
-        if in_quote {
+        if self.state.in_quote {
             charlist.push_str(
                 &self
                     .source
@@ -153,13 +176,13 @@ impl<'s> TokenStream<'s> {
         }
 
         let tok: Option<Token> = match charlist.as_str() {
-            "+" => Some(if trailing_equal {
+            "+" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 PLUS_EQUAL
             } else {
                 PLUS
             }),
-            "-" => Some(if trailing_equal {
+            "-" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 MINUS_EQUAL
             } else if let Some(&">") = self.source.peek() {
@@ -168,37 +191,37 @@ impl<'s> TokenStream<'s> {
             } else {
                 MINUS
             }),
-            "*" => Some(if trailing_equal {
+            "*" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 STAR_EQUAL
             } else {
                 STAR
             }),
-            "/" => Some(if trailing_equal {
+            "/" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 SLASH_EQUAL
             } else {
                 SLASH
             }),
-            ">" => Some(if trailing_equal {
+            ">" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 GREATER_EQUAL
             } else {
                 GREATER
             }),
-            "<" => Some(if trailing_equal {
+            "<" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 LESS_EQUAL
             } else {
                 LESS
             }),
-            "!" => Some(if trailing_equal {
+            "!" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 BANG_EQUAL
             } else {
                 BANG
             }),
-            "=" => Some(if trailing_equal {
+            "=" => Some(if self.state.trailing_equal {
                 assert_eq!(self.source.next().unwrap(), "=");
                 EQUAL_EQUAL
             } else {
@@ -218,8 +241,8 @@ impl<'s> TokenStream<'s> {
             "(" => Some(OPEN_PAREN),
             ")" => Some(CLOSE_PAREN),
             ident => {
-                if !in_quote
-                    && (trailing_whitespace || trailing_equal || trailing_delim || self.eof)
+                if !self.state.in_quote
+                    && (self.state.trailing_whitespace || self.state.trailing_equal || self.state.trailing_delim || self.state.eof)
                 {
                     match ident {
                         "true" => Some(TRUE),

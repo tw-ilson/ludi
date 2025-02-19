@@ -10,7 +10,11 @@ use crate::token::TokenData;
 use crate::types::{PrimitiveFuncType, Type};
 use itertools::Itertools;
 
-pub type ParseTree = Vec<Expr>;
+pub struct ParseTree {
+    pub toplevel_expressions: Vec<Expr>
+}
+
+
 pub type NodeRef<T> = Box<T>;
 
 #[macro_export]
@@ -99,6 +103,7 @@ macro_rules! define_constructors {
 }
 pub use ast;
 pub use define_constructors;
+pub use define_nodes;
 pub use define_enum;
 
 #[derive(Debug, Clone, PartialEq)]

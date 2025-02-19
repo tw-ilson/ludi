@@ -60,7 +60,7 @@ pub enum Array {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Atom {
     AtomRef(Ref<Atom>),
-    Func(Rc<Func>),
+    Func(Rc<Func>), // Note: Maybe this is not a type in the formal sense?
     Forall(Rc<Forall>),
     Pi(Rc<Pi>),
     Sigma(Rc<Sigma>),
@@ -188,6 +188,43 @@ impl Type {
             Self::Atom(_) => Kind::Atom,
             Self::Array(_) => Kind::Array,
         }
+    }
+    fn add_dimension(self, dim: Shape) -> Self {
+        match self {
+            Self::Atom(atom) => {
+                if dim.is_empty() {
+                    Self::Atom(atom)
+                } else {
+                    Self::Array(atom.add_dimension(dim))
+                }
+            }
+            Self::Array(array) => Self::Array(array.add_dimension(dim)),
+        }
+    }
+}
+
+impl Atom {
+    fn add_dimension(self, dim: Shape) -> Array {
+        Array::Arr(Arr {
+            element: self,
+            shape: dim,
+        })
+    }
+}
+
+impl Array {
+    fn add_dimension(self, dim: Shape) -> Self {
+        match self {
+            Array::ArrayRef(_arrayref) => todo!(),
+            Array::Arr(arr) => Array::Arr(arr.add_dimension(dim)),
+        }
+    }
+}
+
+impl Arr {
+    fn add_dimension(mut self, dim: Shape) -> Self {
+        self.shape = dim.concat(self.shape);
+        self
     }
 }
 
@@ -407,15 +444,14 @@ pub mod typed_ast {
 
     // Creates an AST where each node reference is attached to a data structure holding its type
     // information
-    // Note: this is no longer serving the interpreter so let bodies must be present
     ast_typed! {
         TypedExpr {
-              FnDef { body:TypedExpr }
+              FnDef { body:TypedExpr } // function signature is captured by type
             | FnCall { callee: Callee, args: Vec<TypedExpr> }
             | Frame { expression_list: Vec<TypedExpr> }
             | AtomLiteral { value: Literal }
             | ArrayLiteral { value: Vec<Literal> }
-            | Let { name:Name, initializer: TypedExpr, region: TypedExpr }
+            | Let { name:Name, initializer: TypedExpr, region: Option<TypedExpr> }
             | Term { name: Name }
         }
     }
@@ -428,11 +464,11 @@ pub mod typed_ast {
 }
 pub mod typecheck {
     use super::{
-        typed_ast, Arr, Array, Atom, AtomicDataType, Func, GetType, PrimitiveFuncType, Type,
+        typed_ast::{self, TypedExpr}, Arr, Array, Atom, AtomicDataType, Func, GetType, PrimitiveFuncType, Type,
         TypeEnv,
     };
     use crate::{
-        ast::{self, FuncSignature},
+        ast::{self, Arg, FuncSignature},
         atomic::Literal,
         err::{Error, ParseErrorKind, Result, TypeErrorKind},
         shape::Shape,
@@ -442,6 +478,22 @@ pub mod typecheck {
 
     pub trait TypeCheck<T> {
         fn type_check(self, table: &mut TypeEnv) -> Result<T>;
+    }
+
+    pub struct TypedTree {
+        pub toplevel_expressions: Vec<typed_ast::TypedExpr>,
+    }
+
+    impl TypeCheck<TypedTree> for ast::ParseTree {
+        fn type_check(self, table: &mut TypeEnv) -> Result<TypedTree> {
+            Ok(TypedTree {
+                toplevel_expressions: self
+                    .toplevel_expressions
+                    .into_iter()
+                    .map(|expr| expr.type_check(table))
+                    .collect::<Result<Vec<TypedExpr>>>()?,
+            })
+        }
     }
 
     impl TypeCheck<typed_ast::TypedExpr> for ast::Expr {
@@ -508,44 +560,81 @@ pub mod typecheck {
                     let region = match node.region {
                         Some(body) => body.type_check(table)?,
                         None => {
-                            return Err(Error::parse_err(
-                                ParseErrorKind::LetExpr,
-                                "dangling let body not allowed here",
-                            )
-                            .into()); // alternatively, return Unit
+                            // return Err(Error::parse_err(
+                            //     ParseErrorKind::LetExpr,
+                            //     "dangling let body not allowed here",
+                            // )
+                            // .into());
+
+                            // alternatively, return Unit
+                            return Ok(typed_ast::let_node(
+                                Type::Atom(Atom::Unit),
+                                node.name,
+                                initializer,
+                                None,
+                            ));
                         }
                     }; // No restrictions on region type
                     Ok(typed_ast::let_node(
                         region.get_type().clone(),
                         node.name,
                         initializer,
-                        region,
+                        Some(region),
                     ))
                 }
                 Self::FnDef(node) => {
+                    table.push();
+                    for Arg(name, arg_ty) in &node.signature.args {
+                        table.put(name.clone(), arg_ty.clone());
+                    }
                     let body = node.body.type_check(table)?;
-                    if *body.get_type() != node.signature.ret[0] {
-                        return Err(anyhow::anyhow!(
-                            "type error - expected function to return X"
-                        ));
+                    table.pop();
+
+                    if body.get_type() != &node.signature.ret[0] {
+                        return Err(Error::type_err(
+                            TypeErrorKind::TypeMismatch,
+                            "Function body does not match signature!",
+                        )
+                        .into());
                     }
                     let ty = Type::Atom(Atom::Func(Rc::new(node.signature.try_into()?)));
                     Ok(typed_ast::fn_def_node(ty, body))
                 }
                 Self::FnCall(node) => {
-                    // look up type of callee
                     use AtomicDataType::*;
+
+                    let args = node
+                        .args
+                        .into_iter()
+                        .map(|arg_expr| arg_expr.type_check(table))
+                        .collect::<Result<Vec<typed_ast::TypedExpr>>>()?;
+
                     match node.callee {
                         ast::Callee::Expression(call_expr) => {
                             let typed_call_expr = call_expr.type_check(table)?;
                             if let Type::Atom(Atom::Func(func_type)) = typed_call_expr.get_type() {
-                                let ty = func_type.return_type.clone();
+                                // TODO: check func type signature
+                                // check if parameters <= arguments.
+                                let frame = std::iter::zip(&func_type.parameters, &args)
+                                    .fuse()
+                                    .map(|(param_type, arg)| {
+                                        let arg_ty = arg.get_type();
+                                        arg_ty.view(&param_type).ok_or(Error::type_err(
+                                            TypeErrorKind::ShapeMismatch,
+                                            "Mismatched function argument shape!",
+                                        ))
+                                    })
+                                    .process_results(|mut lift_dim_iter| {
+                                        let shape = lift_dim_iter.next();
+                                        // if all frame shapes match_then we can lift
+                                        match shape {
+                                            Some(shape) => if lift_dim_iter.all(|next_shape| next_shape == shape) { Ok(shape) } else { Err(Error::type_err(TypeErrorKind::ShapeMismatch, "Non-uniform lift dimension in function call!"))},
+                                            None => Ok(Shape::empty())
+                                        }
+
+                                    })??;
+                                let ty = func_type.return_type.clone().add_dimension(frame);
                                 let callee = typed_ast::Callee::Expression(typed_call_expr);
-                                let args = node
-                                    .args
-                                    .into_iter()
-                                    .map(|arg_expr| arg_expr.type_check(table))
-                                    .collect::<Result<Vec<typed_ast::TypedExpr>>>()?;
                                 Ok(typed_ast::fn_call_node(ty, callee, args))
                             } else {
                                 Err(anyhow::anyhow!("type error - not a function!"))
@@ -555,48 +644,115 @@ pub mod typecheck {
                             PrimitiveFuncType::Add
                             | PrimitiveFuncType::Sub
                             | PrimitiveFuncType::Mul
-                            | PrimitiveFuncType::Div => {
-                                let mut arg_iter = node.args.into_iter();
-                                let (arg1, arg2) = (
-                                    arg_iter.next().expect("missing arg 1?").type_check(table)?,
-                                    arg_iter.next().expect("missing arg 2?").type_check(table)?,
-                                );
-                                let (ty1, ty2) = (arg1.get_type(), arg2.get_type());
-                                let frame = ty1.agreement(ty2, table);
-                                if !frame.is_some()
-                                    || !matches!(
-                                        ty1,
-                                        Type::Atom(Atom::Literal(numeric!()))
-                                            | Type::Array(Array::Arr(Arr {
-                                                element: Atom::Literal(numeric!()),
-                                                ..
-                                            }))
-                                    )
-                                {
+                            | PrimitiveFuncType::Div
+                            | PrimitiveFuncType::Mod => {
+                                if args.len() != 2 {
                                     return Err(Error::type_err(
-                                        TypeErrorKind::TypeMismatch,
-                                        &format!(
-                                            "types for {} must match: got {:?},  {:?}",
-                                            prim, ty1, ty2
-                                        ),
+                                        TypeErrorKind::Unsupported,
+                                        "arithmetic operation must have 2 arguments!",
                                     )
                                     .into());
                                 }
-                                Ok(typed_ast::fn_call_node(
-                                    ty1.clone(),
-                                    typed_ast::Callee::Primitive(prim),
-                                    vec![arg1, arg2],
-                                ))
+                                let mut arg_iter = args.into_iter();
+                                let (argl, argr) =
+                                    (arg_iter.next().unwrap(), arg_iter.next().unwrap());
+
+                                let (ty_l, ty_r) = (argl.get_type(), argr.get_type());
+
+                                // TODO: figure out auto-mapping semantics for primitives
+
+                                let frame_l = ty_l.view(ty_r);
+                                let frame_r = ty_r.view(ty_l);
+
+                                if !matches!(
+                                    ty_l,
+                                    Type::Atom(Atom::Literal(numeric!()))
+                                        | Type::Array(Array::Arr(Arr {
+                                            element: Atom::Literal(numeric!()),
+                                            ..
+                                        }))
+                                ) {
+                                    return Err(Error::type_err(
+                                        TypeErrorKind::Unsupported,
+                                        "only numeric values are supported for arithmetic operations"
+                                    )
+                                    .into());
+                                }
+                                if frame_l.is_none() && frame_r.is_none() {
+                                    return Err(Error::type_err(
+                                        TypeErrorKind::ShapeMismatch,
+                                        &format!("incompatible shapes for operation"),
+                                    )
+                                    .into());
+
+                                // This is a reordering operation
+                                } else if frame_l.is_some() {
+                                    Ok(typed_ast::fn_call_node(
+                                        ty_l.clone(),
+                                        typed_ast::Callee::Primitive(prim),
+                                        vec![argl, argr],
+                                    ))
+                                } else if frame_r.is_some() {
+                                    Ok(typed_ast::fn_call_node(
+                                        ty_r.clone(),
+                                        typed_ast::Callee::Primitive(prim),
+                                        vec![argr, argl],
+                                    ))
+                                } else {
+                                    unreachable!()
+                                }
                             }
-                            PrimitiveFuncType::Mod => todo!(),
-                            PrimitiveFuncType::Neg => todo!(),
-                            PrimitiveFuncType::Inv => todo!(),
-                            PrimitiveFuncType::Eq => todo!(),
-                            PrimitiveFuncType::Ne => todo!(),
-                            PrimitiveFuncType::Gt => todo!(),
-                            PrimitiveFuncType::GtEq => todo!(),
-                            PrimitiveFuncType::Lt => todo!(),
-                            PrimitiveFuncType::LtEq => todo!(),
+                            PrimitiveFuncType::Neg | PrimitiveFuncType::Inv => {
+                                if args.len() != 1 {
+                                    return Err(Error::type_err(
+                                        TypeErrorKind::Unsupported,
+                                        "Arithmetic operation only supports one argument",
+                                    )
+                                    .into());
+                                }
+                                let arg1 = args.into_iter().next().unwrap();
+                                let ty = arg1.get_type();
+                                if !matches!(
+                                    ty,
+                                    Type::Atom(Atom::Literal(integer_signed!() | float!()))
+                                        | Type::Array(Array::Arr(Arr {
+                                            element: Atom::Literal(integer_signed!() | float!()),
+                                            ..
+                                        }))
+                                ) {
+                                    return Err(Error::type_err(
+                                        TypeErrorKind::Unsupported,
+                                        "Type Unsupported",
+                                    )
+                                    .into());
+                                }
+                                return Ok(typed_ast::fn_call_node(
+                                    ty.clone(),
+                                    typed_ast::Callee::Primitive(prim),
+                                    vec![arg1],
+                                ));
+                            }
+                            PrimitiveFuncType::Eq | PrimitiveFuncType::Ne => {
+                                if args.len() != 2 {
+                                    return Err(Error::type_err(
+                                        TypeErrorKind::Unsupported,
+                                        "arithmetic operation must have 2 arguments!",
+                                    )
+                                    .into());
+                                }
+                                let mut arg_iter = args.into_iter();
+                                let (argl, argr) =
+                                    (arg_iter.next().unwrap(), arg_iter.next().unwrap());
+
+                                let (ty_l, ty_r) = (argl.get_type(), argr.get_type());
+                                todo!()
+                            }
+                            PrimitiveFuncType::Gt
+                            | PrimitiveFuncType::GtEq
+                            | PrimitiveFuncType::Lt
+                            | PrimitiveFuncType::LtEq => {
+                                todo!()
+                            }
                             PrimitiveFuncType::Or => todo!(),
                             PrimitiveFuncType::And => todo!(),
                             PrimitiveFuncType::Not => todo!(),
@@ -624,12 +780,25 @@ pub mod typecheck {
         }
     }
 
-    pub trait FrameAgreement {
-        // returns the prinicipal frame if there is agreement
-        fn agreement(&self, other: &Self, table: &mut TypeEnv) -> Option<Shape>;
+    use crate::shape::Frame;
+    impl Frame for super::Array {
+        fn view(&self, other: &Self) -> Option<Shape> {
+            let arr_a: &Arr = match self {
+                Array::ArrayRef(_name) => todo!(),
+                Array::Arr(arr) => arr,
+            };
+            let arr_b: &Arr = match other {
+                Array::ArrayRef(_name) => todo!(),
+                Array::Arr(arr) => arr,
+            };
+            arr_a
+                .shape
+                .view(&arr_b.shape)
+                .filter(|_| arr_a.element == arr_b.element)
+        }
     }
-    impl FrameAgreement for Type {
-        fn agreement(&self, other: &Self, table: &mut TypeEnv) -> Option<Shape> {
+    impl Frame for Type {
+        fn view(&self, other: &Self) -> Option<Shape> {
             match (self, other) {
                 (Type::Array(a), Type::Array(b)) => {
                     let arr_a: &Arr = match a {
@@ -642,24 +811,24 @@ pub mod typecheck {
                     };
                     arr_a
                         .shape
-                        .subshape_fit(&arr_b.shape)
-                        .or(arr_b.shape.subshape_fit(&arr_a.shape))
-                        .map(Shape::new)
+                        .view(&arr_b.shape)
                         .filter(|_| arr_a.element == arr_b.element)
                 }
                 (Type::Atom(a), Type::Atom(b)) => (a == b).then_some(Shape::new(&[])),
-                (Type::Atom(atom), array @ Type::Array(..))
-                | (array @ Type::Array(..), Type::Atom(atom)) => {
-                    FrameAgreement::agreement(&Type::Array(atom.clone().upgrade()), &array, table)
+                (Type::Atom(atom), array @ Type::Array(..)) => {
+                    Frame::view(&Type::Array(atom.clone().upgrade()), array)
+                }
+                (array @ Type::Array(..), Type::Atom(atom)) => {
+                    Frame::view(array, &Type::Array(atom.clone().upgrade()))
                 }
             }
         }
     }
-    impl std::cmp::PartialOrd for Array {
-        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-            todo!()
-        }
-    }
+    // impl std::cmp::PartialOrd for Array {
+    //     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    //         todo!()
+    //     }
+    // }
     impl TryInto<Func> for FuncSignature {
         type Error = anyhow::Error;
         fn try_into(self) -> Result<Func> {

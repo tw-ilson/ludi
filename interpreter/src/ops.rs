@@ -3,7 +3,7 @@
  */
 
 use crate::array::Array;
-use libludi::shape::ArrayProps;
+use libludi::shape::{Frame, ArrayProps, ShapeOps};
 // use crate::atomic::{AtomicType};
 use libludi::err::{Error, LudiError, RuntimeErrorKind, Result};
 use crate::datatypes::{ArrayType, AtomicType, Data, DataType};
@@ -175,30 +175,31 @@ macro_rules! delegate_binops_std_array {
                 //     return Err(Error::msg("shape error"))
                 // }
 
-                match self.shape().subshape_fit(rhs.shape()) {
-                    Some(&[]) => Ok(Array::new(
-                        self.shape_slice(),
-                        izip!(self.data(), rhs.data())
-                            .map_while(|(a, b)| a.$fname(*b).ok())
-                            .collect::<Vec<T>>(),
-                    )),
+                match self.shape().view(rhs.shape()) {
+                    // Some(&[]) => Ok(Array::new(
+                    //     self.shape_slice(),
+                    //     izip!(self.data(), rhs.data())
+                    //         .map_while(|(a, b)| a.$fname(*b).ok())
+                    //         .collect::<Vec<T>>(),
+                    // )),
+                    // TODO: check if it works with this commented?
                     Some(shape_diff) =>
                         Ok(Array::new(
                                 self.shape_slice(),
                                 {
-                                    let flat_view = self.flat_view(shape_diff).expect("shape error");
+                                    let flat_view = self.flat_view(shape_diff.shape_slice()).expect("shape error");
                                     flat_view.into_iter().flat_map(|subarray| {
                                         subarray.iter().zip(rhs.data()).map_while(|(a, b)| a.$fname(*b).ok())
                                     }).collect::<Vec<T>>()
                                 }
                                 )
                             ),
-                    None => match rhs.shape().subshape_fit(self.shape()) {
+                    None => match rhs.shape().view(self.shape()) {
                         Some(shape_diff) =>
                             Ok(Array::new(
                                     rhs.shape_slice(),
                                     {
-                                        let flat_view = rhs.flat_view(shape_diff).expect("shape error");
+                                        let flat_view = rhs.flat_view(shape_diff.shape_slice()).expect("shape error");
                                         flat_view.into_iter().flat_map(|subarray| {
                                             subarray.iter().zip(self.data()).map_while(|(a, b)| a.$fname(*b).ok())
                                         }).collect::<Vec<T>>()
