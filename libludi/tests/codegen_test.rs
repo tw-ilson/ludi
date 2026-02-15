@@ -28,28 +28,51 @@ fn verify_codegen(program: &str) -> Result<bool> {
     Ok(module.as_operation().verify())
 }
 
+/// Helper to generate MLIR string for snapshot testing
+fn codegen_to_string(program: &str) -> Result<String> {
+    let expr = expression(&mut program.lex())?.type_check(&mut TypeEnv::new())?;
+    let writer = CodeWriter::new();
+    let module = writer.write_ast(&expr)?;
+    let mlir_str = module
+        .as_operation()
+        .to_string_with_flags(OperationPrintingFlags::new())?;
+
+    // Verify the module is valid
+    assert!(module.as_operation().verify(), "Generated MLIR failed verification");
+
+    Ok(mlir_str)
+}
+
 #[test]
-fn return_constant() -> anyhow::Result<()> {
-    assert!(verify_codegen(" 1 ")?);
-    // assert!(verify_codegen(" -1 ")?);
-    assert!(verify_codegen(" 2.4 ")?);
+fn return_constant_int() -> anyhow::Result<()> {
+    let mlir = codegen_to_string(" 1 ")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+fn return_constant_float() -> anyhow::Result<()> {
+    let mlir = codegen_to_string(" 2.4 ")?;
+    insta::assert_snapshot!(mlir);
     Ok(())
 }
 
 #[test]
 fn identity_func() -> anyhow::Result<()> {
-    assert!(verify_codegen("fn id(a) { a }")?);
+    let mlir = codegen_to_string("fn id(a) { a }")?;
+    insta::assert_snapshot!(mlir);
     Ok(())
 }
 
 
 #[test]
 fn fn_simple() -> anyhow::Result<()> {
-    assert!(verify_codegen(
+    let mlir = codegen_to_string(
         "fn add(x, y) {
             x + y
         }"
-    )?);
+    )?;
+    insta::assert_snapshot!(mlir);
     Ok(())
 }
 
