@@ -15,6 +15,7 @@ thiserror = "1.0.61" # derive macro for std::Error
 unicode-segmentation = "1.11.0" # unicode character for lexer
 melior = { version="0.18.6", features = ["ods-dialects"], path="../../melior/melior" } # MLIR
 paste = "1.0.15" # identifier concat in macros
+mlir-sys = "0.2.2" # MLIR C bindings (must match melior's version)
 
 # serde = { version = "1.0.210", features=["derive"] }
 # bytemuck = "1.18.0"

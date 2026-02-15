@@ -68,9 +68,11 @@ impl CodeWriter {
         context: &'c melior::Context,
         region: melior::ir::Region<'c>,
     ) -> ir::Operation<'c> {
-        // let block = ir::Block::new(&[]);
-        // block.append_operation(dialect::func::r#return(, ir::Location::unknown(context)));
-        // region.append_block(block);
+        // Add a return statement to the first (and only) block in the region
+        if let Some(block) = region.first_block() {
+            block.append_operation(dialect::func::r#return(&[], ir::Location::unknown(context)));
+        }
+
         dialect::func::func(
             context,
             ir::attribute::StringAttribute::new(context, "main"),
@@ -141,7 +143,7 @@ impl<'c> MLIRGen<'c, melior::ir::operation::Operation<'c>> for typed_ast::AtomLi
             context,
             match &self.value {
                 Literal::Int { atom, loc: _ } => IntegerAttribute::new(
-                    melior::ir::r#type::IntegerType::signed(context, 64).into(),
+                    melior::ir::r#type::IntegerType::new(context, 64).into(),
                     atom.parse()?,
                 )
                 .into(),
