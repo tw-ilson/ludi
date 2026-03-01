@@ -15,22 +15,6 @@ use melior::{
     },
 };
 
-fn verify_codegen(program: &str) -> Result<bool> {
-    let expr = expression(&mut program.lex())?.type_check(&mut TypeEnv::new())?;
-    let tree = TypedTree {
-        toplevel_expressions: vec![expr],
-    };
-    let writer = CodeWriter::new();
-    let module = writer.write_ast(&tree)?;
-    println!(
-        "{}",
-        module
-            .as_operation()
-            .to_string_with_flags(OperationPrintingFlags::new())?
-    );
-    Ok(module.as_operation().verify())
-}
-
 /// Helper to generate MLIR string for snapshot testing
 fn codegen_to_string(program: &str) -> Result<String> {
     let expr = expression(&mut program.lex())?.type_check(&mut TypeEnv::new())?;
@@ -42,12 +26,6 @@ fn codegen_to_string(program: &str) -> Result<String> {
     let mlir_str = module
         .as_operation()
         .to_string_with_flags(OperationPrintingFlags::new())?;
-
-    // Print verification status for debugging (but don't fail)
-    let is_valid = module.as_operation().verify();
-    println!("MLIR verification: {}", if is_valid { "PASSED" } else { "FAILED" });
-    println!("Generated MLIR:\n{}", mlir_str);
-
     Ok(mlir_str)
 }
 
