@@ -43,21 +43,277 @@ fn return_constant_float() -> anyhow::Result<()> {
     Ok(())
 }
 
+// =============================================================================
+// Phase 1: Let Bindings Tests
+// =============================================================================
+
 #[test]
+#[ignore = "Let bindings not yet implemented"]
+fn let_simple_literal() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("let x = 42; x")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Let bindings not yet implemented"]
+fn let_with_expression() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("let x = 10 + 5; x")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Let bindings with regions not yet implemented"]
+fn let_with_scoped_region() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("let x = 5 { x + 10 }")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Nested let bindings not yet implemented"]
+fn let_nested() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("let x = 5 { let y = 10 { x + y } }")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Type coercion in let bindings not yet implemented"]
+fn let_with_type_inference() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("let x = 3.14; let y = 2; x + y")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+// =============================================================================
+// Phase 2: Function Definition Tests
+// =============================================================================
+
+#[test]
+#[ignore = "Function definitions not yet implemented"]
+fn fn_no_params() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("fn get_answer() { 42 }")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Function definitions not yet implemented"]
+fn fn_single_param() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("fn double(x) { x + x }")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Function definitions not yet implemented"]
+fn fn_multiple_params() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("fn add(x, y) { x + y }")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Function definitions not yet implemented"]
 fn identity_func() -> anyhow::Result<()> {
     let mlir = codegen_to_string("fn id(a) { a }")?;
     insta::assert_snapshot!(mlir);
     Ok(())
 }
 
-
 #[test]
+#[ignore = "Function definitions not yet implemented"]
 fn fn_simple() -> anyhow::Result<()> {
     let mlir = codegen_to_string(
         "fn add(x, y) {
             x + y
         }"
     )?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Function calls not yet implemented"]
+fn fn_call_basic() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("fn add(x, y) { x + y } add(5, 3)")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Function definitions with let bindings not yet implemented"]
+fn fn_with_let_binding() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("fn compute(x) { let y = x * 2 { y + 10 } }")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Recursive functions require control flow - deferred"]
+fn fn_recursive() -> anyhow::Result<()> {
+    let mlir = codegen_to_string(
+        "fn factorial(n) { if (n <= 1) { 1 } else { n * factorial(n - 1) } }"
+    )?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+// =============================================================================
+// Phase 3: Array Operations Tests
+// =============================================================================
+
+#[test]
+#[ignore = "Array literals not yet implemented"]
+fn array_literal_1d() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("[1.0, 2.0, 3.0]")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Multi-dimensional array literals not yet implemented"]
+fn array_literal_2d() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("[[1.0, 2.0], [3.0, 4.0]]")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Array operations not yet implemented"]
+fn array_elementwise_add() -> anyhow::Result<()> {
+    let mlir = codegen_to_string(
+        "let a = [1.0, 2.0, 3.0]; let b = [4.0, 5.0, 6.0]; a + b"
+    )?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Scalar-array broadcasting not yet implemented"]
+fn array_scalar_broadcast() -> anyhow::Result<()> {
+    let mlir = codegen_to_string(
+        "let scalar = 2.0; let arr = [1.0, 2.0, 3.0]; scalar * arr"
+    )?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Array reduction not yet implemented"]
+fn array_reduction_sum() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("reduce(+, [1.0, 2.0, 3.0, 4.0])")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+// =============================================================================
+// Phase 4: Arithmetic Operations Tests
+// =============================================================================
+
+#[test]
+#[ignore = "Arithmetic operations not yet implemented"]
+fn arith_add_constants() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("1 + 2")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Arithmetic operations not yet implemented"]
+fn arith_sub_constants() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("10 - 3")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Arithmetic operations not yet implemented"]
+fn arith_mul_constants() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("4 * 5")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Arithmetic operations not yet implemented"]
+fn arith_div_constants() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("20 / 4")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Complex arithmetic expressions not yet implemented"]
+fn arith_complex_expression() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("(2 + 3) * 4")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Float arithmetic not yet implemented"]
+fn arith_float_operations() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("3.14 * 2.0")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+// =============================================================================
+// Additional Edge Cases and Integration Tests
+// =============================================================================
+
+#[test]
+#[ignore = "Negative numbers not yet implemented"]
+fn negative_constant() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("-1")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Boolean literals not yet implemented"]
+fn boolean_constant() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("true")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Character literals not yet implemented"]
+fn char_constant() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("'a'")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+fn zero_constant_int() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("0")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+fn zero_constant_float() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("0.0")?;
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+fn large_constant_int() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("9223372036854775807")?; // i64::MAX
+    insta::assert_snapshot!(mlir);
+    Ok(())
+}
+
+#[test]
+#[ignore = "Parser doesn't support scientific notation yet"]
+fn scientific_notation_float() -> anyhow::Result<()> {
+    let mlir = codegen_to_string("1.23e-4")?;
     insta::assert_snapshot!(mlir);
     Ok(())
 }

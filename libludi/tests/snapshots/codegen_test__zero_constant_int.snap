@@ -1,0 +1,10 @@
+---
+source: libludi/tests/codegen_test.rs
+expression: mlir
+---
+module {
+  func.func @main() {
+    %c0_i64 = arith.constant 0 : i64
+    return
+  }
+}
